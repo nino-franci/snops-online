@@ -56,3 +56,10 @@ Pravila za **3 igralce** bomo definirali posebej. Zato je možnost ustvarjanja n
 - Pogled mize je na vsakem telefonu relativen igralcu: jaz spodaj, partner nasproti, nasprotnika levo/desno.
 - Karte drugih igralcev so prikazane samo s hrbtno stranjo; vsebine rok ostanejo na strezniku skrite.
 - Med dejanskim igranjem se vmesnik preklopi v focus mode: skrije rezultat, sobo, log/klepet in glavo ter poudari mizo, adut, igralca na potezi in lastne karte.
+
+## v4 dodatki
+- Pri Malem (7) se odigrane karte ne poberejo z mize: vseh pet krogov ostane vizualno razporejenih od sredine proti vsakemu igralcu.
+- Gostitelj sedezni red ureja na vizualni mizi. Na racunalniku lahko igralce vlece, na telefonu pa tapne dva igralca za zamenjavo.
+- Ko so vsi 4 igralci v sobi, se prikaz takoj preklopi na mizo/focus pogled, se preden se zacne deljenje.
+- `public/cards/` je pripravljen za prave PNG slike kart; ce slike ni, ostane CSS nadomestna karta.
+- `PUSH_CHANGES.bat` in `GIT-WORKFLOW.md` omogocata normalen git push brez rocnega nalaganja datotek.

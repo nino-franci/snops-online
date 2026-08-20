@@ -77,7 +77,7 @@ function createRoom(hostSocket, payload) {
     cutterIndex: null, callerIndex: null, dealMode: null, deck: [], hands: [], pendingSecond: [], talon: [],
     trumpSuit: null, auction: null, contract: null, bidderIndex: null,
     contra: null, multiplier: 1,
-    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null,
+    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [],
     roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
@@ -109,6 +109,7 @@ function startRound(room) {
   room.turnIndex = null;
   room.trickNo = 0;
   room.lastTrickWinner = null;
+  room.smallHistory = [];
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
   room.captured = Array.from({ length: room.playerCount }, () => []);
@@ -323,9 +324,14 @@ function resolveSmallTrick(room) {
   const bidder = room.bidderIndex;
   const bidderPlay = room.trick.find((p) => p.playerIndex === bidder);
   if (!bidderPlay) return;
+  // Pri Malem se karte NE pobirajo. Shranimo vsak končan štih, da lahko
+  // klient vseh 5 krogov vizualno pusti na mizi od sredine proti igralcem.
+  const completedTrick = room.trick.map((p) => ({ playerIndex: p.playerIndex, card: p.card }));
+  room.smallHistory.push(completedTrick);
   const lowerSameSuit = room.trick.some((p) => p.playerIndex !== bidder && p.card.suit === bidderPlay.card.suit && RANK_POWER[p.card.rank] < RANK_POWER[bidderPlay.card.rank]);
   room.trickNo += 1;
   if (lowerSameSuit) {
+    room.trick = [];
     return finishRound(room, otherTeam(teamOf(bidder)), teamOf(bidder), CONTRACTS.small.value, 'Mali ni uspel: v enem štihu je padla nižja karta iste barve.');
   }
   room.trick = [];
@@ -413,7 +419,7 @@ function publicState(room, socketId) {
     me, myTeam, myHand: me >= 0 ? (room.hands[me] || []) : [], legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
-    trick: room.trick, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
+    trick: room.trick, smallHistory: room.smallHistory || [], trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
     melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }

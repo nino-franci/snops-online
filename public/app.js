@@ -19,6 +19,7 @@ let playerCount = 4;
 let state = null;
 let selectedTalon = new Set();
 let deferredInstall = null;
+let seatSwapFrom = null;
 
 nameInput.value = localStorage.getItem('snops-name') || '';
 roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
@@ -50,15 +51,23 @@ function pipLayout(rank, symbol) {
   return `<div class="ten-pips">${Array.from({length:10}, () => `<span>${symbol}</span>`).join('')}</div>`;
 }
 
+function cardAssetName(card) {
+  const suitCode = { hearts:'H', diamonds:'D', clubs:'C', spades:'S' }[card.suit];
+  return `${card.rank}${suitCode}.png`;
+}
 function cardHTML(card, { button=false, playable=false, selected=false } = {}) {
   const red = ['hearts','diamonds'].includes(card.suit) ? ' red' : '';
   const classes = `card${red}${playable ? ' playable' : ''}${selected ? ' selected' : ''}`;
   const attrs = button ? `data-card-id="${safe(card.id)}" ${playable ? '' : 'disabled'}` : '';
   const tag = button ? 'button' : 'div';
+  const asset = `/cards/${cardAssetName(card)}`;
   return `<${tag} class="${classes}" ${attrs} aria-label="${safe(card.rank)} ${safe(suitName[card.suit])}">
-    <span class="corner top"><b>${safe(card.rank)}</b><i>${suitSymbol[card.suit]}</i></span>
-    <span class="card-center">${pipLayout(card.rank, suitSymbol[card.suit])}</span>
-    <span class="corner bottom"><b>${safe(card.rank)}</b><i>${suitSymbol[card.suit]}</i></span>
+    <span class="card-fallback">
+      <span class="corner top"><b>${safe(card.rank)}</b><i>${suitSymbol[card.suit]}</i></span>
+      <span class="card-center">${pipLayout(card.rank, suitSymbol[card.suit])}</span>
+      <span class="corner bottom"><b>${safe(card.rank)}</b><i>${suitSymbol[card.suit]}</i></span>
+    </span>
+    <img class="card-art" src="${asset}" alt="" draggable="false" onerror="this.remove()" />
   </${tag}>`;
 }
 
@@ -143,8 +152,37 @@ function renderPlayersAround() {
   }).join('');
 }
 
+function smallTrackPosition(seatClass, step) {
+  // step 0..4: prva karta je blizu sredine, naslednje gredo proti igralcu.
+  const t = 0.25 + step * 0.12;
+  const targets = {
+    'seat-bottom':[50,88,0], 'seat-top':[50,12,180],
+    'seat-left':[8,50,90], 'seat-right':[92,50,-90]
+  };
+  const [tx,ty,rot] = targets[seatClass] || [50,50,0];
+  const x = 50 + (tx-50)*t;
+  const y = 50 + (ty-50)*t;
+  return `left:${x}%;top:${y}%;--card-rot:${rot}deg;`;
+}
+function renderSmallTracks(area) {
+  const completed = state.smallHistory || [];
+  const byPlayer = new Map(state.players.map((p) => [p.index, []]));
+  completed.forEach((trick) => trick.forEach((play) => byPlayer.get(play.playerIndex)?.push(play.card)));
+  state.trick.forEach((play) => byPlayer.get(play.playerIndex)?.push(play.card));
+  const cards = [];
+  for (const p of state.players) {
+    const seat = relativeSeat(p.index);
+    const list = byPlayer.get(p.index) || [];
+    list.forEach((card, i) => cards.push(`<div class="small-played ${seat} ${i === list.length-1 && state.trick.some(x=>x.playerIndex===p.index) ? 'current':''}" style="${smallTrackPosition(seat,i)}">${cardHTML(card)}</div>`));
+  }
+  area.innerHTML = `<div class="small-track-layer"><div class="table-center-mark">Mali · ${completed.length + 1}/5</div>${cards.join('')}</div>`;
+}
 function renderTrick() {
   const area = $('#trickArea');
+  if (state.phase === 'playing' && state.contract === 'small') {
+    renderSmallTracks(area);
+    return;
+  }
   if (!state.trick.length) {
     area.innerHTML = `<div class="table-center-mark">${state.phase==='playing'?'Šnops':'Miza'}</div>`;
     return;
@@ -155,13 +193,26 @@ function renderTrick() {
 function renderLobbyActions() {
   const me = state.players[state.me];
   const full = state.players.length === state.playerCount;
-  const seatNames = ['Spodaj / sedež 1','Desno / sedež 2','Nasproti / sedež 3','Levo / sedež 4'];
-  const manager = me?.isHost && state.playerCount===4 ? `<div class="team-manager"><h4>Razporedi sedeže in ekipe</h4><p class="muted">Partnerja morata biti nasproti: sedeža 1+3 in 2+4.</p>${state.players.map((p)=>`<div class="seat-row"><span><b>${p.index+1}. ${safe(p.name)}</b> <small>${p.index%2===0?'Ekipa 1':'Ekipa 2'}</small></span><select data-seat-player="${p.index}">${state.players.map((_,i)=>`<option value="${i}" ${i===p.index?'selected':''}>${seatNames[i]}</option>`).join('')}</select></div>`).join('')}</div>` : '';
-  return `<div class="action-box"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
-    <p class="muted">Sedeži določajo pare: 1+3 proti 2+4.</p>${manager}
-    ${me?.isHost ? `<button id="startBtn" class="primary big" ${full?'':'disabled'}>Začni igro</button>` : '<p class="muted">Gostitelj razporedi ekipe in začne igro.</p>'}
+  const seatLabels = ['Sedež 1','Sedež 2','Sedež 3','Sedež 4'];
+  const visualManager = me?.isHost && state.playerCount===4 ? `<div class="team-manager visual-manager">
+    <h4>Razporedi ekipe</h4>
+    <p class="muted">Povleci igralca na drug sedež ali tapni dva igralca za zamenjavo. Nasprotna sedeža sta partnerja.</p>
+    <div class="seat-editor-board">
+      ${state.players.map((p)=>`<button type="button" class="seat-editor-chip seat-editor-${p.index} ${seatSwapFrom===p.index?'picked':''}" draggable="true" data-seat-chip="${p.index}" data-drop-seat="${p.index}">
+        <small>${seatLabels[p.index]}</small><b>${safe(p.name)}</b><span>${p.index%2===0?'Ekipa A':'Ekipa B'}</span>
+      </button>`).join('')}
+      <div class="pair-line pair-a"></div><div class="pair-line pair-b"></div>
+      <div class="seat-editor-center">A ↕<br>B ↔</div>
+    </div>
+    <div class="pair-summary"><span><b>Ekipa A:</b> ${safe(state.players[0]?.name||'—')} + ${safe(state.players[2]?.name||'—')}</span><span><b>Ekipa B:</b> ${safe(state.players[1]?.name||'—')} + ${safe(state.players[3]?.name||'—')}</span></div>
+  </div>` : '';
+  return `<div class="action-box lobby-action"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
+    ${full ? '<p class="ready-note">Vsi ste za mizo. Gostitelj naj uredi sedeže in začne deljenje.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}
+    ${visualManager}
+    ${me?.isHost ? `<button id="startBtn" class="primary big" ${full?'':'disabled'}>Sedeži so pravilni · začni deljenje</button>` : '<p class="muted">Gostitelj razporedi ekipe in začne deljenje.</p>'}
   </div>`;
 }
+
 function renderCutActions() {
   if (state.me !== state.cutterIndex) return `<div class="action-box"><p class="muted">${safe(state.players[state.cutterIndex].name)} izbira predvig ali udarec.</p></div>`;
   return `<div class="action-box"><h3>Predvig ali udarec?</h3><p class="muted">To izbira igralec desno od delivca. Predvig: igralec levo od delivca najprej dobi 3 in rufa, po 3 kartah za vse sledi se 2-2-2-2. Udarec: igralec levo od delivca dobi 3, rufa, nato se 2; ostali dobijo po 5.</p><div class="action-buttons"><button class="primary" data-cut="cut">Predvig</button><button class="secondary" data-cut="knock">Udari po kartah</button></div></div>`;
@@ -233,7 +284,24 @@ function renderActions() {
   $('#actionArea').innerHTML = html;
 
   $('#startBtn')?.addEventListener('click', () => socket.emit('startGame'));
-  $$('[data-seat-player]').forEach((el) => el.addEventListener('change', () => socket.emit('setSeat', { playerIndex:Number(el.dataset.seatPlayer), seatIndex:Number(el.value) })));
+  $$('[data-seat-chip]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = Number(el.dataset.seatChip);
+      if (seatSwapFrom === null) { seatSwapFrom = idx; renderActions(); return; }
+      if (seatSwapFrom === idx) { seatSwapFrom = null; renderActions(); return; }
+      socket.emit('setSeat', { playerIndex: seatSwapFrom, seatIndex: idx });
+      seatSwapFrom = null;
+    });
+    el.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', el.dataset.seatChip); e.dataTransfer.effectAllowed='move'; });
+    el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect='move'; el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault(); el.classList.remove('drag-over');
+      const from = Number(e.dataTransfer.getData('text/plain')), to = Number(el.dataset.dropSeat);
+      if (Number.isInteger(from) && Number.isInteger(to) && from !== to) socket.emit('setSeat', { playerIndex: from, seatIndex: to });
+      seatSwapFrom = null;
+    });
+  });
   $('#nextRoundBtn')?.addEventListener('click', () => { selectedTalon.clear(); socket.emit('nextRound'); });
   $$('[data-cut]').forEach((b) => b.addEventListener('click', () => socket.emit('chooseCut', { mode:b.dataset.cut })));
   $$('[data-call-suit]').forEach((b) => b.addEventListener('click', () => socket.emit('chooseCall', { suit:b.dataset.callSuit })));
@@ -274,7 +342,8 @@ function renderLogs() {
 function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
-  gameView.classList.toggle('focus-mode', state.phase === 'playing');
+  gameView.classList.toggle('focus-mode', state.phase === 'playing' || (state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4));
+  gameView.classList.toggle('seating-mode', state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4);
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderActions(); renderHand(); renderLogs();
 }

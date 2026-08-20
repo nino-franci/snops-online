@@ -268,3 +268,51 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .trick-cross .played .card { width:52px; }
   .focus-mode .hand-scroll .card { flex-basis:66px; width:66px; margin-left:-15px; }
 }
+
+/* --- v4: vizualno razporejanje sedežev + Mali 7 sled kart --- */
+.visual-manager { padding: 12px; }
+.seat-editor-board {
+  position: relative; width: min(100%, 420px); aspect-ratio: 1.38;
+  margin: 10px auto 12px; border-radius: 48% / 42%;
+  background: radial-gradient(ellipse at center, rgba(49,104,75,.5), rgba(8,28,20,.35) 64%, rgba(255,255,255,.04) 65%);
+  border: 1px solid rgba(255,255,255,.08); overflow: visible;
+}
+.seat-editor-chip {
+  position:absolute; z-index:3; width:min(39%,150px); min-height:62px; padding:8px;
+  transform:translate(-50%,-50%); border-radius:14px; color:var(--text);
+  background:rgba(7,24,17,.96); border:2px solid rgba(255,255,255,.12);
+  box-shadow:0 8px 18px rgba(0,0,0,.28); touch-action:manipulation;
+}
+.seat-editor-chip small,.seat-editor-chip span { display:block; font-size:.64rem; color:var(--muted); }
+.seat-editor-chip b { display:block; margin:2px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.seat-editor-chip.picked,.seat-editor-chip.drag-over { border-color:var(--gold); box-shadow:0 0 0 4px rgba(240,197,109,.18),0 8px 18px rgba(0,0,0,.3); }
+.seat-editor-0 { left:50%; top:88%; } .seat-editor-1 { left:86%; top:50%; }
+.seat-editor-2 { left:50%; top:12%; } .seat-editor-3 { left:14%; top:50%; }
+.pair-line { position:absolute; left:50%; top:50%; transform-origin:center; opacity:.45; pointer-events:none; }
+.pair-line::before { content:''; display:block; width:3px; height:72%; min-height:120px; background:linear-gradient(transparent,var(--gold),transparent); transform:translate(-50%,-50%); }
+.pair-line.pair-a { transform:rotate(0deg); } .pair-line.pair-b { transform:rotate(90deg); }
+.pair-line.pair-b::before { background:linear-gradient(transparent,#72d49d,transparent); }
+.seat-editor-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,.5); font-size:.7rem; text-align:center; font-weight:900; }
+.pair-summary { display:grid; gap:6px; grid-template-columns:1fr 1fr; margin-bottom:10px; font-size:.76rem; }
+.pair-summary span { padding:7px 8px; border-radius:10px; background:rgba(255,255,255,.05); }
+.ready-note { margin:4px 0 8px; font-weight:800; color:var(--gold); }
+
+.small-track-layer { position:absolute; inset:0; }
+.small-played { position:absolute; transform:translate(-50%,-50%) rotate(var(--card-rot)); z-index:2; transition:left .18s ease,top .18s ease; }
+.small-played .card { width:46px; box-shadow:0 5px 12px rgba(0,0,0,.32); }
+.small-played.current { z-index:4; filter:drop-shadow(0 0 7px rgba(240,197,109,.55)); }
+.small-played.current .card { outline:2px solid rgba(240,197,109,.55); }
+
+.card-art { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; z-index:4; pointer-events:none; background:#fff; border-radius:inherit; }
+.card-fallback { position:absolute; inset:0; }
+
+@media (max-width:420px) {
+  .seat-editor-board { width:100%; aspect-ratio:1.15; }
+  .seat-editor-chip { width:42%; min-height:56px; padding:6px; }
+  .seat-editor-0 { top:91%; } .seat-editor-2 { top:9%; }
+  .seat-editor-1 { left:84%; } .seat-editor-3 { left:16%; }
+  .pair-summary { grid-template-columns:1fr; }
+  .small-played .card { width:40px; }
+  .focus-mode .hand-scroll { max-width:100%; padding-inline:8px; }
+  .focus-mode .hand-scroll .card { flex-basis:min(20vw,72px); width:min(20vw,72px); margin-left:-11px; }
+}
