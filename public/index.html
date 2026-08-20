@@ -14,7 +14,7 @@
     <header class="topbar">
       <div>
         <div class="brand">🃏 Šnops Online</div>
-        <div class="subbrand">družinska igra za 3 ali 4 telefone</div>
+        <div class="subbrand">družinska online igra za 4 telefone</div>
       </div>
       <button id="installBtn" class="ghost hidden">Namesti</button>
     </header>
@@ -35,7 +35,7 @@
 
           <div class="segmented" aria-label="Število igralcev">
             <button class="seg active" data-count="4">4 igralci</button>
-            <button class="seg" data-count="3">3 igralci</button>
+            <button class="seg" data-count="3" disabled title="Pravila za 3 igralce uredimo posebej">3 igralci (kmalu)</button>
           </div>
 
           <label>Ciljni rezultat</label>
@@ -95,14 +95,21 @@
             </form>
           </div>
           <div id="rulesTab" class="tab-body hidden rules-copy">
-            <h3>Vgrajena hišna pravila</h3>
-            <p><b>Karte:</b> 20 kart: fant, dama, kralj, 10, as. Vrednosti so 2, 3, 4, 10 in 11.</p>
-            <p><b>3 igralci:</b> 3 karte vsakemu, 2 v talon, nato še 3. Prvi za delilcem izbere adut ali odpre 4. karto. Nato lahko zamenja 2 karti s talonom.</p>
-            <p><b>4 igralci:</b> 3 karte vsakemu, prvi za delilcem rufa karto (barvo + vrednost), nato se razdeli še po 2. Imetnik rufane karte je partner.</p>
-            <p><b>Štih:</b> obvezno je barvati; če lahko, moraš preštihati. Če nimaš barve, moraš dati aduta; če nimaš niti aduta, lahko odvržeš poljubno.</p>
-            <p><b>20/40:</b> kralj + dama iste barve ob začetku štiha. Navadna barva šteje 20, adut 40. Točke se aktivirajo, ko tvoja stran pobere štih.</p>
-            <p><b>Navadna igra:</b> 66 točk ali zadnji štih. Zmagovalci dobijo 1, 2 ali 3 igralne točke glede na rezultat poražencev.</p>
-            <p><b>Posebne igre:</b> Šnops 6, Berač 7, Durhmarš 9, Paver 12. Ker se regionalna pravila razlikujejo, so zbrana v strežniški datoteki in jih lahko prilagodite.</p>
+            <h3>Hišna pravila – 4 igralci / 2 na 2</h3>
+            <p><b>Pari:</b> partnerja sedita nasproti: igralca 1+3 proti 2+4. Pari ostanejo enaki do konca partije.</p>
+            <p><b>Karte:</b> J &lt; Q &lt; K &lt; 10 &lt; A. Točke: J=2, Q=3, K=4, 10=10, A=11.</p>
+            <p><b>Deljenje:</b> igralec za delilcem izbere predvig ali udarec. Pri predvigu se deli 3-3-3-3, prvi rufa adut, nato 2-2-2-2. Pri udarcu prvi dobi 3, rufa, nato še 2, ostali pa po 5.</p>
+            <p><b>Rufanje:</b> rufa se samo barva aduta: srce, kara, križ ali pik. Rufati je dovoljeno katerokoli barvo, tudi če jo igralec že ima.</p>
+            <p><b>Licitacija:</b> Dalje ali Višam. Igre: Šnops 6, Mali 7, Veliki 9, Veliki z aduti 12, Igra 18, Igra 24. Če vsi rečejo dalje, se igra navadna igra.</p>
+            <p><b>Kontra:</b> šele po koncu licitacije in pred prvo karto. Kontra ×2, kontra nazaj ×3, do konca ×4.</p>
+            <p><b>Navadna igra:</b> obvezno barvanje, preštihanje in adut, kadar igralec nima barve. 20/40 lahko napove kdorkoli na potezi; šteje ekipi po prvem osvojenem štihu. Zmaga pri 66 se potrdi z gumbom <b>Štejem</b>.</p>
+            <p><b>Šnops 6:</b> igralec mora sam pobrati prve največ 3 štihe in zbrati 66+. Barvati je treba, preštihati ni treba. Po osvojenem štihu lahko reče <b>Zaprem</b>; če nima 66, takoj izgubi.</p>
+            <p><b>Mali 7:</b> brez adutov, samo barvanje. Igralec mora biti v vseh 5 štihih najnižji v svoji vodeni barvi.</p>
+            <p><b>Veliki 9:</b> brez adutov, samo barvanje; igralec mora pobrati vseh 5 štihov.</p>
+            <p><b>Veliki z aduti 12:</b> kot Veliki, vendar aduti veljajo.</p>
+            <p><b>18 / 24:</b> 18 se lahko kliče s petimi kartami iste barve, 24 pa s petimi kartami rufanega aduta. To sta avtomatski igri brez odigravanja štihov.</p>
+            <p><b>Partija:</b> poražena ekipa zapisuje vrednost igre oziroma 1/2/3 pri navadni igri. Partija se igra do 25.</p>
+            <p class="muted"><b>Opomba:</b> pravila za 3 igralce bomo uredili posebej; do takrat je ustvarjanje nove sobe za 3 v vmesniku izklopljeno.</p>
           </div>
         </section>
       </section>

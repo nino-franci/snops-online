@@ -5,56 +5,44 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' }
-});
-
+const io = new Server(server, { cors: { origin: '*' } });
 const PORT = process.env.PORT || 3000;
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const rooms = new Map();
-
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['J', 'Q', 'K', '10', 'A'];
 const CARD_POINTS = { J: 2, Q: 3, K: 4, '10': 10, A: 11 };
 const RANK_POWER = { J: 1, Q: 2, K: 3, '10': 4, A: 5 };
 
 const CONTRACTS = {
-  normal: { label: 'Navadna', value: 1, trump: true, melds: true },
-  schnops: { label: 'Snops', value: 6, trump: true, melds: true },
-  beggar: { label: 'Berac', value: 7, trump: false, melds: false },
-  march: { label: 'Durhmars', value: 9, trump: false, melds: false },
-  paver: { label: 'Paver', value: 12, trump: true, melds: false }
+  normal: { label: 'Navadna igra', value: 1, trump: true, melds: true },
+  schnops: { label: 'Šnops', value: 6, trump: true, melds: true },
+  small: { label: 'Mali', value: 7, trump: false, melds: false },
+  big: { label: 'Veliki', value: 9, trump: false, melds: false },
+  big_trump: { label: 'Veliki z aduti', value: 12, trump: true, melds: false },
+  eighteen: { label: 'Igra 18', value: 18, trump: false, melds: false, instant: true },
+  twentyfour: { label: 'Igra 24', value: 24, trump: false, melds: false, instant: true }
 };
 
 function cleanName(name) {
   return String(name || '').trim().replace(/\s+/g, ' ').slice(0, 20) || 'Igralec';
 }
-
 function makeCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  do {
-    code = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  } while (rooms.has(code));
+  do code = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  while (rooms.has(code));
   return code;
 }
-
 function makeToken() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
-
 function deck20() {
-  const deck = [];
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      deck.push({ id: `${suit}-${rank}`, suit, rank, points: CARD_POINTS[rank] });
-    }
-  }
-  return deck;
+  return SUITS.flatMap((suit) => RANKS.map((rank) => ({ id: `${suit}-${rank}`, suit, rank, points: CARD_POINTS[rank] })));
 }
-
 function shuffle(items) {
   const a = items.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -63,187 +51,159 @@ function shuffle(items) {
   }
   return a;
 }
-
-function nextIndex(room, idx) {
-  return (idx + 1) % room.playerCount;
-}
-
+function nextIndex(room, idx) { return (idx + 1) % room.playerCount; }
 function log(room, text) {
   room.log.push({ id: `${Date.now()}-${Math.random()}`, text, at: Date.now() });
-  if (room.log.length > 80) room.log.shift();
+  if (room.log.length > 100) room.log.shift();
 }
-
 function playerBySocket(room, socketId) {
   const index = room.players.findIndex((p) => p.socketId === socketId);
   return { player: room.players[index], index };
 }
+function teamOf(index) { return index % 2; }
+function teamMembers(team) { return team === 0 ? [0, 2] : [1, 3]; }
+function otherTeam(team) { return team === 0 ? 1 : 0; }
+function teamName(room, team) { return teamMembers(team).map((i) => room.players[i]?.name).filter(Boolean).join(' + '); }
 
 function createRoom(hostSocket, payload) {
   const playerCount = Number(payload.playerCount) === 3 ? 3 : 4;
   const targetScore = Math.max(7, Math.min(99, Number(payload.targetScore) || 25));
+  const token = payload.token || makeToken();
   const room = {
-    code: makeCode(),
-    hostToken: payload.token || makeToken(),
-    playerCount,
-    targetScore,
-    players: [],
-    phase: 'lobby',
-    dealerIndex: Math.floor(Math.random() * playerCount),
-    roundNo: 0,
-    hands: [],
-    pendingSecond: [],
-    talon: [],
-    trumpSuit: null,
-    callerIndex: null,
-    calledCard: null,
-    calledCardRevealed: false,
-    partnerIndex: null,
-    auction: null,
-    contract: null,
-    bidderIndex: null,
-    trick: [],
-    trickLeader: null,
-    turnIndex: null,
-    trickNo: 0,
-    captured: [],
-    melds: [],
-    roundPoints: [],
-    trickCounts: [],
-    matchPoints: Array(playerCount).fill(0),
-    roundResult: null,
-    lastTrickWinner: null,
-    log: [],
-    chat: []
+    code: makeCode(), hostToken: token, playerCount, targetScore,
+    players: [{ name: cleanName(payload.name), token, socketId: hostSocket.id, connected: true }],
+    phase: 'lobby', dealerIndex: Math.floor(Math.random() * playerCount), roundNo: 0,
+    cutterIndex: null, callerIndex: null, dealMode: null, deck: [], hands: [], pendingSecond: [], talon: [],
+    trumpSuit: null, auction: null, contract: null, bidderIndex: null,
+    contra: null, multiplier: 1,
+    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null,
+    roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
+    teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
-  const token = payload.token || room.hostToken;
-  room.hostToken = token;
-  room.players.push({
-    name: cleanName(payload.name),
-    token,
-    socketId: hostSocket.id,
-    connected: true
-  });
   rooms.set(room.code, room);
   log(room, `${room.players[0].name} je ustvaril sobo ${room.code}.`);
   return room;
 }
 
-function splitSecondPackets(deck, count, cardsEach) {
-  const packets = Array.from({ length: count }, () => []);
-  for (let r = 0; r < cardsEach; r++) {
-    for (let p = 0; p < count; p++) packets[p].push(deck.shift());
-  }
-  return packets;
-}
-
-function dealFirst(room) {
-  const deck = shuffle(deck20());
-  room.hands = Array.from({ length: room.playerCount }, () => []);
-  for (let r = 0; r < 3; r++) {
-    for (let p = 0; p < room.playerCount; p++) room.hands[p].push(deck.shift());
-  }
-
-  if (room.playerCount === 3) {
-    room.talon = [deck.shift(), deck.shift()];
-    room.pendingSecond = splitSecondPackets(deck, 3, 3);
-  } else {
-    room.talon = [];
-    room.pendingSecond = splitSecondPackets(deck, 4, 2);
-  }
-}
-
 function startRound(room) {
   room.roundNo += 1;
   room.dealerIndex = room.roundNo === 1 ? room.dealerIndex : nextIndex(room, room.dealerIndex);
+  room.cutterIndex = nextIndex(room, room.dealerIndex);
   room.callerIndex = nextIndex(room, room.dealerIndex);
+  room.dealMode = null;
+  room.deck = shuffle(deck20());
+  room.hands = Array.from({ length: room.playerCount }, () => []);
+  room.pendingSecond = [];
+  room.talon = [];
   room.trumpSuit = null;
-  room.calledCard = null;
-  room.calledCardRevealed = false;
-  room.partnerIndex = null;
+  room.auction = null;
   room.contract = null;
   room.bidderIndex = null;
-  room.auction = null;
+  room.contra = null;
+  room.multiplier = 1;
   room.trick = [];
   room.trickLeader = null;
   room.turnIndex = null;
   room.trickNo = 0;
-  room.captured = Array.from({ length: room.playerCount }, () => []);
-  room.melds = [];
+  room.lastTrickWinner = null;
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
+  room.captured = Array.from({ length: room.playerCount }, () => []);
+  room.melds = [];
   room.roundResult = null;
-  room.lastTrickWinner = null;
-  dealFirst(room);
 
-  if (room.playerCount === 3) {
-    room.phase = 'choose_trump';
-    log(room, `${room.players[room.callerIndex].name} izbira aduta iz prvih treh kart.`);
+  if (room.playerCount === 4) {
+    room.phase = 'cut';
+    log(room, `${room.players[room.dealerIndex].name} deli. ${room.players[room.cutterIndex].name} izbere predvig ali udarec.`);
   } else {
-    room.phase = 'choose_call';
-    log(room, `${room.players[room.callerIndex].name} rufa karto (barva + vrednost).`);
+    // 3-player pravila ostajajo začasno po prejšnji različici; natančno jih bomo prilagodili posebej.
+    legacyDealThree(room);
   }
 }
 
-function completeDeal(room) {
-  for (let i = 0; i < room.playerCount; i++) {
-    room.hands[i].push(...room.pendingSecond[i]);
+function legacyDealThree(room) {
+  for (let r = 0; r < 3; r++) for (let p = 0; p < 3; p++) room.hands[p].push(room.deck.shift());
+  room.talon = [room.deck.shift(), room.deck.shift()];
+  room.pendingSecond = Array.from({ length: 3 }, () => []);
+  for (let r = 0; r < 3; r++) for (let p = 0; p < 3; p++) room.pendingSecond[p].push(room.deck.shift());
+  room.phase = 'choose_trump';
+  log(room, `${room.players[room.callerIndex].name} izbira aduta za igro na 3.`);
+}
+
+function dealFourFirst(room, mode) {
+  room.dealMode = mode;
+  if (mode === 'cut') {
+    for (let r = 0; r < 3; r++) for (let p = 0; p < 4; p++) room.hands[p].push(room.deck.shift());
+    room.pendingSecond = Array.from({ length: 4 }, () => []);
+    for (let r = 0; r < 2; r++) for (let p = 0; p < 4; p++) room.pendingSecond[p].push(room.deck.shift());
+  } else {
+    // Udarec: prvi igralec dobi 3 in rufa; po rufu dobi še 2, ostali po 5.
+    for (let i = 0; i < 3; i++) room.hands[room.callerIndex].push(room.deck.shift());
   }
-  room.pendingSecond = [];
+  room.phase = 'choose_call';
+  log(room, `${room.players[room.callerIndex].name} ima prve 3 karte in rufa barvo aduta.`);
+}
+
+function completeFourDeal(room) {
+  if (room.dealMode === 'cut') {
+    for (let i = 0; i < 4; i++) room.hands[i].push(...room.pendingSecond[i]);
+    room.pendingSecond = [];
+  } else {
+    for (let i = 0; i < 2; i++) room.hands[room.callerIndex].push(room.deck.shift());
+    let p = nextIndex(room, room.callerIndex);
+    while (p !== room.callerIndex) {
+      for (let i = 0; i < 5; i++) room.hands[p].push(room.deck.shift());
+      p = nextIndex(room, p);
+    }
+  }
+  beginAuction(room);
 }
 
 function beginAuction(room) {
   room.phase = 'auction';
-  room.auction = {
-    currentIndex: room.callerIndex,
-    passed: Array(room.playerCount).fill(false),
-    best: { contract: 'normal', playerIndex: room.callerIndex, value: CONTRACTS.normal.value },
-    turns: 0
-  };
-  log(room, 'Zacenja se licitacija. Navadna igra je zacetna ponudba klicatelja.');
+  room.auction = { currentIndex: room.callerIndex, best: null, passesSinceBid: 0, totalPasses: 0 };
+  log(room, 'Licitacija: Dalje ali Višam. Če vsi rečejo dalje, se igra navadna igra.');
+}
+
+function canBidInstant(room, index, contract) {
+  const hand = room.hands[index] || [];
+  if (hand.length !== 5) return false;
+  if (contract === 'eighteen') return hand.every((c) => c.suit === hand[0].suit);
+  if (contract === 'twentyfour') return hand.every((c) => c.suit === room.trumpSuit);
+  return true;
 }
 
 function finishAuction(room) {
-  room.contract = room.auction.best.contract;
-  room.bidderIndex = room.auction.best.playerIndex;
+  if (!room.auction?.best) {
+    room.contract = 'normal';
+    room.bidderIndex = room.callerIndex;
+  } else {
+    room.contract = room.auction.best.contract;
+    room.bidderIndex = room.auction.best.playerIndex;
+  }
+  room.auction = null;
+  log(room, `${room.players[room.bidderIndex].name} igra ${CONTRACTS[room.contract].label}.`);
+
+  if (CONTRACTS[room.contract].instant) {
+    return finishRound(room, teamOf(room.bidderIndex), otherTeam(teamOf(room.bidderIndex)), CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} je avtomatsko uspela.`);
+  }
+  beginContra(room);
+}
+
+function beginContra(room) {
+  const playingTeam = teamOf(room.bidderIndex);
+  room.phase = 'contra';
+  room.multiplier = 1;
+  room.contra = { stage: 0, actionTeam: otherTeam(playingTeam), passed: [] };
+  log(room, `${teamName(room, room.contra.actionTeam)} lahko rečeta kontra ali brez kontre.`);
+}
+
+function beginPlay(room) {
   room.phase = 'playing';
   room.trickLeader = room.contract === 'normal' ? room.callerIndex : room.bidderIndex;
   room.turnIndex = room.trickLeader;
-  room.auction = null;
-  log(room, `${room.players[room.bidderIndex].name} igra: ${CONTRACTS[room.contract].label}.`);
-}
-
-function normalTeamMembers(room, forIndex) {
-  if (room.playerCount === 3) {
-    if (forIndex === room.callerIndex) return [room.callerIndex];
-    return room.players.map((_p, i) => i).filter((i) => i !== room.callerIndex);
-  }
-
-  const callerSide = room.partnerIndex !== null && room.partnerIndex !== room.callerIndex
-    ? [room.callerIndex, room.partnerIndex]
-    : [room.callerIndex];
-  if (callerSide.includes(forIndex)) return callerSide;
-  return room.players.map((_p, i) => i).filter((i) => !callerSide.includes(i));
-}
-
-function effectiveSide(room, playerIndex) {
-  if (room.contract === 'normal') return normalTeamMembers(room, playerIndex);
-  return [playerIndex];
-}
-
-function sideKey(indices) {
-  return indices.slice().sort((a, b) => a - b).join(',');
-}
-
-function sideScore(room, members) {
-  return members.reduce((sum, i) => sum + room.roundPoints[i], 0);
-}
-
-function sideTricks(room, members) {
-  return members.reduce((sum, i) => sum + room.trickCounts[i], 0);
-}
-
-function suitCards(hand, suit) {
-  return hand.filter((c) => c.suit === suit);
+  room.contra = null;
+  log(room, `Igra se začne. Vrednost x${room.multiplier}.`);
 }
 
 function compareCards(a, b, leadSuit, trumpSuit, trumpEnabled) {
@@ -259,7 +219,7 @@ function compareCards(a, b, leadSuit, trumpSuit, trumpEnabled) {
 function currentWinningPlay(room) {
   if (!room.trick.length) return null;
   const leadSuit = room.trick[0].card.suit;
-  const trumpEnabled = CONTRACTS[room.contract].trump;
+  const trumpEnabled = ['normal', 'schnops', 'big_trump'].includes(room.contract);
   let best = room.trick[0];
   for (let i = 1; i < room.trick.length; i++) {
     if (compareCards(room.trick[i].card, best.card, leadSuit, room.trumpSuit, trumpEnabled) > 0) best = room.trick[i];
@@ -273,32 +233,32 @@ function legalCardIds(room, playerIndex) {
   if (!room.trick.length) return hand.map((c) => c.id);
 
   const leadSuit = room.trick[0].card.suit;
-  const trumpEnabled = CONTRACTS[room.contract].trump;
-  const currentWinner = currentWinningPlay(room);
-  const follow = suitCards(hand, leadSuit);
+  const follow = hand.filter((c) => c.suit === leadSuit);
+  const strict = room.contract === 'normal';
 
+  if (!strict) return (follow.length ? follow : hand).map((c) => c.id);
+
+  const winner = currentWinningPlay(room);
   if (follow.length) {
-    const beating = follow.filter((c) => compareCards(c, currentWinner.card, leadSuit, room.trumpSuit, trumpEnabled) > 0);
+    const beating = follow.filter((c) => compareCards(c, winner.card, leadSuit, room.trumpSuit, true) > 0);
     return (beating.length ? beating : follow).map((c) => c.id);
   }
 
-  if (trumpEnabled) {
-    const trumps = suitCards(hand, room.trumpSuit);
-    if (trumps.length) {
-      if (currentWinner.card.suit === room.trumpSuit) {
-        const beatingTrump = trumps.filter((c) => compareCards(c, currentWinner.card, leadSuit, room.trumpSuit, true) > 0);
-        return (beatingTrump.length ? beatingTrump : trumps).map((c) => c.id);
-      }
-      return trumps.map((c) => c.id);
+  const trumps = hand.filter((c) => c.suit === room.trumpSuit);
+  if (trumps.length) {
+    if (winner.card.suit === room.trumpSuit) {
+      const over = trumps.filter((c) => RANK_POWER[c.rank] > RANK_POWER[winner.card.rank]);
+      return (over.length ? over : trumps).map((c) => c.id);
     }
+    return trumps.map((c) => c.id);
   }
-
   return hand.map((c) => c.id);
 }
 
 function eligibleMelds(room, playerIndex) {
-  if (room.phase !== 'playing' || room.turnIndex !== playerIndex || room.trick.length) return [];
-  if (!CONTRACTS[room.contract]?.melds) return [];
+  if (room.phase !== 'playing' || room.turnIndex !== playerIndex) return [];
+  if (!['normal', 'schnops'].includes(room.contract)) return [];
+  if (room.contract === 'schnops' && playerIndex !== room.bidderIndex) return [];
   const hand = room.hands[playerIndex] || [];
   return SUITS.filter((suit) => {
     const hasK = hand.some((c) => c.suit === suit && c.rank === 'K');
@@ -308,417 +268,334 @@ function eligibleMelds(room, playerIndex) {
   }).map((suit) => ({ suit, points: suit === room.trumpSuit ? 40 : 20 }));
 }
 
-function activateMeldsForWinner(room, winnerIndex) {
-  let activatedTotal = 0;
+function activatePendingMelds(room, team) {
+  if (room.playerCount !== 4) return;
+  const hasTrick = teamMembers(team).some((i) => room.trickCounts[i] > 0);
+  if (!hasTrick) return;
   for (const meld of room.melds) {
-    if (meld.activated) continue;
-    const sameSide = room.contract === 'normal'
-      ? sideKey(normalTeamMembers(room, meld.playerIndex)) === sideKey(normalTeamMembers(room, winnerIndex))
-      : meld.playerIndex === winnerIndex;
-    if (sameSide) {
-      meld.activated = true;
-      room.roundPoints[meld.playerIndex] += meld.points;
-      activatedTotal += meld.points;
-    }
-  }
-  return activatedTotal;
-}
-
-function revealCalledPartnerIfNeeded(room, card, playerIndex) {
-  if (room.playerCount !== 4 || room.calledCardRevealed || !room.calledCard) return;
-  if (card.id === room.calledCard.id) {
-    room.calledCardRevealed = true;
-    log(room, `${room.players[playerIndex].name} je odigral rufano karto - partner je razkrit.`);
+    if (meld.activated || teamOf(meld.playerIndex) !== team) continue;
+    meld.activated = true;
+    room.roundPoints[meld.playerIndex] += meld.points;
+    log(room, `${room.players[meld.playerIndex].name}: ${meld.points} se prišteje ekipi.`);
   }
 }
 
-function resolveTrick(room) {
-  const winningPlay = currentWinningPlay(room);
-  const winner = winningPlay.playerIndex;
-  const trickPoints = room.trick.reduce((sum, p) => sum + p.card.points, 0);
-  room.roundPoints[winner] += trickPoints;
+function teamRoundScore(room, team) {
+  return teamMembers(team).reduce((sum, i) => sum + (room.roundPoints[i] || 0), 0);
+}
+function teamTricks(room, team) {
+  return teamMembers(team).reduce((sum, i) => sum + (room.trickCounts[i] || 0), 0);
+}
+
+function finishRound(room, winnerTeam, loserTeam, baseAmount, reason) {
+  const amount = baseAmount * room.multiplier;
+  room.teamPenalty[loserTeam] += amount;
+  room.roundResult = {
+    winnerTeam, loserTeam, winners: teamMembers(winnerTeam), losers: teamMembers(loserTeam),
+    amount, baseAmount, multiplier: room.multiplier, reason, contract: room.contract,
+    teamPenalty: room.teamPenalty.slice()
+  };
+  room.phase = room.teamPenalty.some((v) => v >= room.targetScore) ? 'match_end' : 'round_end';
+  room.turnIndex = null;
+  log(room, `${teamName(room, loserTeam)} pišeta ${amount}. ${reason}`);
+}
+
+function normalFinishByCount(room, countingTeam) {
+  activatePendingMelds(room, countingTeam);
+  const score = teamRoundScore(room, countingTeam);
+  if (score < 66 || teamTricks(room, countingTeam) < 1) return false;
+  const loserTeam = otherTeam(countingTeam);
+  const loserScore = teamRoundScore(room, loserTeam);
+  const loserTrickCount = teamTricks(room, loserTeam);
+  const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
+  finishRound(room, countingTeam, loserTeam, amount, `${teamName(room, countingTeam)} je pravilno štela ${score}.`);
+  return true;
+}
+
+function resolveSmallTrick(room) {
+  const bidder = room.bidderIndex;
+  const bidderPlay = room.trick.find((p) => p.playerIndex === bidder);
+  if (!bidderPlay) return;
+  const lowerSameSuit = room.trick.some((p) => p.playerIndex !== bidder && p.card.suit === bidderPlay.card.suit && RANK_POWER[p.card.rank] < RANK_POWER[bidderPlay.card.rank]);
+  room.trickNo += 1;
+  if (lowerSameSuit) {
+    return finishRound(room, otherTeam(teamOf(bidder)), teamOf(bidder), CONTRACTS.small.value, 'Mali ni uspel: v enem štihu je padla nižja karta iste barve.');
+  }
+  room.trick = [];
+  if (room.trickNo >= 5) return finishRound(room, teamOf(bidder), otherTeam(teamOf(bidder)), CONTRACTS.small.value, 'Mali je uspel v vseh 5 štihih.');
+  room.trickLeader = bidder;
+  room.turnIndex = bidder;
+}
+
+function resolveStandardTrick(room) {
+  const winning = currentWinningPlay(room);
+  const winner = winning.playerIndex;
+  const points = room.trick.reduce((sum, p) => sum + p.card.points, 0);
+  room.roundPoints[winner] += points;
   room.trickCounts[winner] += 1;
   room.captured[winner].push(...room.trick.map((p) => p.card));
-  activateMeldsForWinner(room, winner);
   room.lastTrickWinner = winner;
   room.trickNo += 1;
-  log(room, `${room.players[winner].name} pobere stih (+${trickPoints}).`);
+  activatePendingMelds(room, teamOf(winner));
+  log(room, `${room.players[winner].name} pobere štih (+${points}).`);
   room.trick = [];
   room.trickLeader = winner;
   room.turnIndex = winner;
 
-  evaluateRound(room);
-}
-
-function awardMatchPoints(room, winners, amount) {
-  for (const i of winners) room.matchPoints[i] += amount;
-}
-
-function endRound(room, winnerIndices, amount, reason) {
-  const unique = [...new Set(winnerIndices)];
-  awardMatchPoints(room, unique, amount);
-  room.roundResult = {
-    winners: unique,
-    amount,
-    reason,
-    contract: room.contract,
-    scoreSnapshot: room.roundPoints.slice()
-  };
-  room.phase = room.matchPoints.some((p) => p >= room.targetScore) ? 'match_end' : 'round_end';
-  room.turnIndex = null;
-  log(room, `${unique.map((i) => room.players[i].name).join(' + ')} dobijo ${amount} tock. ${reason}`);
-}
-
-function evaluateNormal(room) {
-  const callerSide = normalTeamMembers(room, room.callerIndex);
-  const defenderSide = room.players.map((_p, i) => i).filter((i) => !callerSide.includes(i));
-  const callerScore = sideScore(room, callerSide);
-  const defenderScore = sideScore(room, defenderSide);
-
-  let winners = null;
-  if (callerScore >= 66) winners = callerSide;
-  else if (defenderScore >= 66) winners = defenderSide;
-  else if (room.hands.every((h) => h.length === 0) && room.lastTrickWinner !== null) {
-    winners = normalTeamMembers(room, room.lastTrickWinner);
-  }
-  if (!winners) return;
-
-  const losers = room.players.map((_p, i) => i).filter((i) => !winners.includes(i));
-  const loserScore = sideScore(room, losers);
-  const loserTricks = sideTricks(room, losers);
-  const amount = loserTricks === 0 ? 3 : loserScore <= 32 ? 2 : 1;
-
-  // Ce se pri 4 igralcih rufana karta do konca ni pokazala in zmaga klicateljeva stran,
-  // pise samo klicatelj. To je pogosta slovenska hisna varianta.
-  let creditedWinners = winners;
-  if (room.playerCount === 4 && winners.includes(room.callerIndex) && !room.calledCardRevealed) {
-    creditedWinners = [room.callerIndex];
-  }
-  endRound(room, creditedWinners, amount, `Navadna igra: ${Math.max(callerScore, defenderScore)} tock v zmagovalni strani.`);
-}
-
-function evaluateSpecial(room) {
   const bidder = room.bidderIndex;
-  const value = CONTRACTS[room.contract].value;
-  const bidderTricks = room.trickCounts[bidder];
-  const bidderScore = room.roundPoints[bidder];
+  const bidderTeam = teamOf(bidder);
   const cardsLeft = room.hands.reduce((sum, h) => sum + h.length, 0);
-  const opponents = room.players.map((_p, i) => i).filter((i) => i !== bidder);
-
-  if (room.contract === 'beggar') {
-    if (bidderTricks > 0) return endRound(room, opponents, value, 'Berac ni uspel: licitator je pobral stih.');
-    if (cardsLeft === 0) return endRound(room, [bidder], value, 'Berac uspel: brez osvojenega stiha.');
-    return;
-  }
-
-  if (room.contract === 'march' || room.contract === 'paver') {
-    const somebodyElseHasTrick = room.trickCounts.some((n, i) => i !== bidder && n > 0);
-    if (somebodyElseHasTrick) return endRound(room, opponents, value, `${CONTRACTS[room.contract].label} ni uspel.`);
-    if (cardsLeft === 0) return endRound(room, [bidder], value, `${CONTRACTS[room.contract].label} uspel: vsi stihi.`);
-    return;
-  }
 
   if (room.contract === 'schnops') {
-    const somebodyElseHasTrick = room.trickCounts.some((n, i) => i !== bidder && n > 0);
-    if (somebodyElseHasTrick) return endRound(room, opponents, value, 'Snops ni uspel: licitator ni pobral vseh potrebnih stihov.');
+    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, 'Šnops ni uspel: štih je pobral drug igralec.');
     if (room.trickNo >= 3) {
-      if (bidderTricks >= 3 && bidderScore >= 66) return endRound(room, [bidder], value, 'Snops uspel v prvih treh stihih.');
-      return endRound(room, opponents, value, 'Snops ni dosegel 66 v prvih treh stihih.');
+      const score = teamRoundScore(room, bidderTeam);
+      if (score >= 66) return finishRound(room, bidderTeam, otherTeam(bidderTeam), 6, `Šnops uspel: ${score} točk v 3 štihih.`);
+      return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, `Šnops ni uspel: po 3 štihih samo ${score} točk.`);
     }
+    return;
+  }
+
+  if (room.contract === 'big' || room.contract === 'big_trump') {
+    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} ni uspel: štih je pobral drug igralec.`);
+    if (cardsLeft === 0) return finishRound(room, bidderTeam, otherTeam(bidderTeam), CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} uspel: vseh 5 štihov.`);
+    return;
+  }
+
+  if (room.contract === 'normal' && cardsLeft === 0) {
+    const t0 = teamRoundScore(room, 0);
+    const t1 = teamRoundScore(room, 1);
+    const winnerTeam = t0 === t1 ? teamOf(winner) : (t0 > t1 ? 0 : 1);
+    const loserTeam = otherTeam(winnerTeam);
+    const loserScore = teamRoundScore(room, loserTeam);
+    const loserTrickCount = teamTricks(room, loserTeam);
+    const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
+    return finishRound(room, winnerTeam, loserTeam, amount, `Karte so odigrane. Rezultat ${t0}:${t1}.`);
   }
 }
 
-function evaluateRound(room) {
-  if (room.phase !== 'playing') return;
-  if (room.contract === 'normal') evaluateNormal(room);
-  else evaluateSpecial(room);
+function resolveTrick(room) {
+  if (room.contract === 'small') return resolveSmallTrick(room);
+  return resolveStandardTrick(room);
 }
 
 function publicState(room, socketId) {
   const me = room.players.findIndex((p) => p.socketId === socketId);
-  const revealPartner = room.calledCardRevealed || ['round_end', 'match_end'].includes(room.phase);
   const hostIndex = room.players.findIndex((p) => p.token === room.hostToken);
+  const four = room.playerCount === 4;
+  const myTeam = four && me >= 0 ? teamOf(me) : null;
+  const teamScores = four ? [teamRoundScore(room, 0), teamRoundScore(room, 1)] : null;
+  const canCount = four && room.phase === 'playing' && room.contract === 'normal' && room.trick.length === 0 && room.lastTrickWinner !== null && myTeam === teamOf(room.lastTrickWinner);
+  const canClose = four && room.phase === 'playing' && room.contract === 'schnops' && me === room.bidderIndex && room.trick.length === 0 && room.trickNo > 0;
 
   return {
-    code: room.code,
-    playerCount: room.playerCount,
-    targetScore: room.targetScore,
-    phase: room.phase,
-    roundNo: room.roundNo,
-    dealerIndex: room.dealerIndex,
-    callerIndex: room.callerIndex,
-    trumpSuit: room.trumpSuit,
-    calledCard: room.calledCard,
-    calledCardRevealed: room.calledCardRevealed,
-    partnerIndex: revealPartner ? room.partnerIndex : null,
-    contract: room.contract,
-    bidderIndex: room.bidderIndex,
-    auction: room.auction ? {
-      currentIndex: room.auction.currentIndex,
-      best: room.auction.best,
-      passed: room.auction.passed
-    } : null,
+    code: room.code, playerCount: room.playerCount, targetScore: room.targetScore, phase: room.phase, roundNo: room.roundNo,
+    dealerIndex: room.dealerIndex, cutterIndex: room.cutterIndex, callerIndex: room.callerIndex, dealMode: room.dealMode,
+    trumpSuit: room.trumpSuit, contract: room.contract, bidderIndex: room.bidderIndex, multiplier: room.multiplier,
+    auction: room.auction ? { currentIndex: room.auction.currentIndex, best: room.auction.best, passesSinceBid: room.auction.passesSinceBid } : null,
+    contra: room.contra ? { stage: room.contra.stage, actionTeam: room.contra.actionTeam, passed: room.contra.passed } : null,
     players: room.players.map((p, i) => ({
-      index: i,
-      name: p.name,
-      connected: p.connected,
-      isHost: i === hostIndex,
-      handCount: room.hands[i]?.length || 0,
-      matchPoints: room.matchPoints[i] || 0,
-      roundPoints: room.roundPoints[i] || 0,
-      tricks: room.trickCounts[i] || 0
+      index: i, name: p.name, connected: p.connected, isHost: i === hostIndex, handCount: room.hands[i]?.length || 0,
+      team: four ? teamOf(i) : null, matchPoints: four ? room.teamPenalty[teamOf(i)] : 0,
+      roundPoints: room.roundPoints[i] || 0, tricks: room.trickCounts[i] || 0
     })),
-    me,
-    myHand: me >= 0 ? (room.hands[me] || []) : [],
-    legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
-    eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [],
-    talonCount: room.talon.length,
-    myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
-    trick: room.trick,
-    trickLeader: room.trickLeader,
-    turnIndex: room.turnIndex,
-    trickNo: room.trickNo,
-    melds: room.melds,
-    roundResult: room.roundResult,
-    log: room.log.slice(-20),
-    chat: room.chat.slice(-30),
-    contracts: CONTRACTS
+    teams: four ? [
+      { index: 0, members: [0,2], penalty: room.teamPenalty[0], roundPoints: teamScores[0], tricks: teamTricks(room,0) },
+      { index: 1, members: [1,3], penalty: room.teamPenalty[1], roundPoints: teamScores[1], tricks: teamTricks(room,1) }
+    ] : null,
+    me, myTeam, myHand: me >= 0 ? (room.hands[me] || []) : [], legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
+    eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
+    talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
+    trick: room.trick, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
+    melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }
 
-function emitRoom(room) {
-  for (const p of room.players) {
-    if (p.socketId) io.to(p.socketId).emit('state', publicState(room, p.socketId));
-  }
-}
-
-function emitError(socket, message) {
-  socket.emit('gameError', message);
-}
-
+function emitRoom(room) { for (const p of room.players) if (p.socketId) io.to(p.socketId).emit('state', publicState(room, p.socketId)); }
+function emitError(socket, message) { socket.emit('gameError', message); }
 function roomForSocket(socket) {
-  for (const room of rooms.values()) {
-    if (room.players.some((p) => p.socketId === socket.id)) return room;
-  }
+  for (const room of rooms.values()) if (room.players.some((p) => p.socketId === socket.id)) return room;
   return null;
 }
 
 io.on('connection', (socket) => {
   socket.on('createRoom', (payload = {}, ack = () => {}) => {
-    const room = createRoom(socket, payload);
-    socket.join(room.code);
-    ack({ ok: true, code: room.code, token: room.players[0].token });
-    emitRoom(room);
+    const room = createRoom(socket, payload); socket.join(room.code);
+    ack({ ok: true, code: room.code, token: room.players[0].token }); emitRoom(room);
   });
 
   socket.on('joinRoom', (payload = {}, ack = () => {}) => {
     const code = String(payload.code || '').trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) return ack({ ok: false, error: 'Soba ne obstaja.' });
-
     const token = payload.token || makeToken();
     let player = room.players.find((p) => p.token === token);
     if (player) {
-      player.socketId = socket.id;
-      player.connected = true;
-      player.name = cleanName(payload.name || player.name);
-      socket.join(code);
-      ack({ ok: true, code, token });
-      log(room, `${player.name} se je ponovno povezal.`);
-      return emitRoom(room);
+      player.socketId = socket.id; player.connected = true; player.name = cleanName(payload.name || player.name); socket.join(code);
+      ack({ ok: true, code, token }); log(room, `${player.name} se je ponovno povezal.`); return emitRoom(room);
     }
-
-    if (room.phase !== 'lobby') return ack({ ok: false, error: 'Igra se je ze zacela. Za ponovni vstop uporabi isti telefon/brskalnik.' });
+    if (room.phase !== 'lobby') return ack({ ok: false, error: 'Igra se je že začela. Za ponovni vstop uporabi isti telefon/brskalnik.' });
     if (room.players.length >= room.playerCount) return ack({ ok: false, error: 'Soba je polna.' });
-
     player = { name: cleanName(payload.name), token, socketId: socket.id, connected: true };
-    room.players.push(player);
-    socket.join(code);
-    ack({ ok: true, code, token });
-    log(room, `${player.name} se je pridruzil.`);
-    emitRoom(room);
+    room.players.push(player); socket.join(code); ack({ ok: true, code, token }); log(room, `${player.name} se je pridružil.`); emitRoom(room);
   });
 
   socket.on('startGame', () => {
-    const room = roomForSocket(socket);
-    if (!room) return;
+    const room = roomForSocket(socket); if (!room) return;
     const { player } = playerBySocket(room, socket.id);
-    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko zacne.');
+    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko začne.');
     if (room.players.length !== room.playerCount) return emitError(socket, `Potrebujete ${room.playerCount} igralce.`);
     if (room.phase !== 'lobby') return;
-    startRound(room);
-    emitRoom(room);
+    startRound(room); emitRoom(room);
   });
 
-  socket.on('chooseTrump', ({ suit, fourthCard } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'choose_trump') return;
+  socket.on('chooseCut', ({ mode } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'cut' || room.playerCount !== 4) return;
     const { index } = playerBySocket(room, socket.id);
-    if (index !== room.callerIndex) return emitError(socket, 'Adut izbira klicatelj.');
-
-    if (fourthCard) {
-      const revealed = room.pendingSecond[index]?.[0];
-      if (!revealed) return emitError(socket, 'Cetrta karta ni na voljo.');
-      room.trumpSuit = revealed.suit;
-      log(room, `${room.players[index].name} je odprl 4. karto: ${revealed.rank} ${revealed.suit}.`);
-    } else {
-      if (!SUITS.includes(suit)) return emitError(socket, 'Neveljaven adut.');
-      room.trumpSuit = suit;
-      log(room, `${room.players[index].name} je izbral adut: ${suit}.`);
-    }
-    completeDeal(room);
-    room.phase = 'talon_exchange';
-    emitRoom(room);
+    if (index !== room.cutterIndex) return emitError(socket, 'Predvig ali udarec izbere igralec za delilcem.');
+    if (!['cut', 'knock'].includes(mode)) return emitError(socket, 'Neveljavna izbira.');
+    log(room, `${room.players[index].name}: ${mode === 'cut' ? 'predvig' : 'udarec po kartah'}.`);
+    dealFourFirst(room, mode); emitRoom(room);
   });
 
-  socket.on('exchangeTalon', ({ cardIds = [] } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'talon_exchange') return;
+  socket.on('chooseCall', ({ suit } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'choose_call' || room.playerCount !== 4) return;
     const { index } = playerBySocket(room, socket.id);
-    if (index !== room.callerIndex) return emitError(socket, 'Talon menja klicatelj.');
-    if (cardIds.length !== 0 && cardIds.length !== 2) return emitError(socket, 'Zamenjaj natanko dve karti ali preskoci talon.');
-
-    if (cardIds.length === 2) {
-      const hand = room.hands[index];
-      const selected = cardIds.map((id) => hand.find((c) => c.id === id));
-      if (selected.some((c) => !c) || new Set(cardIds).size !== 2) return emitError(socket, 'Neveljavna izbira kart.');
-      room.hands[index] = hand.filter((c) => !cardIds.includes(c.id)).concat(room.talon);
-      room.talon = selected;
-      log(room, `${room.players[index].name} je zamenjal dve karti s talonom.`);
-    } else {
-      log(room, `${room.players[index].name} je pustil talon pri miru.`);
-    }
-    beginAuction(room);
-    emitRoom(room);
-  });
-
-  socket.on('chooseCall', ({ suit, rank } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'choose_call') return;
-    const { index } = playerBySocket(room, socket.id);
-    if (index !== room.callerIndex) return emitError(socket, 'Rufa klicatelj.');
-    if (!SUITS.includes(suit) || !RANKS.includes(rank)) return emitError(socket, 'Neveljavna rufana karta.');
-    if (room.hands[index].some((c) => c.suit === suit && c.rank === rank)) return emitError(socket, 'Ne mores rufati karte, ki jo ze imas v prvih treh kartah.');
-
+    if (index !== room.callerIndex) return emitError(socket, 'Adut rufa prvi igralec.');
+    if (!SUITS.includes(suit)) return emitError(socket, 'Neveljavna barva aduta.');
     room.trumpSuit = suit;
-    room.calledCard = { id: `${suit}-${rank}`, suit, rank, points: CARD_POINTS[rank] };
-    completeDeal(room);
-    room.partnerIndex = room.hands.findIndex((h, i) => i !== index && h.some((c) => c.id === room.calledCard.id));
-    if (room.partnerIndex < 0) room.partnerIndex = index;
-    log(room, `${room.players[index].name} je rufal ${rank} ${suit}.`);
-    beginAuction(room);
-    emitRoom(room);
+    log(room, `${room.players[index].name} rufa ${suit}.`);
+    completeFourDeal(room); emitRoom(room);
+  });
+
+  // Začasno ohranjena osnovna igra na 3 iz stare različice.
+  socket.on('chooseTrump', ({ suit, fourthCard } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'choose_trump' || room.playerCount !== 3) return;
+    const { index } = playerBySocket(room, socket.id); if (index !== room.callerIndex) return emitError(socket, 'Adut izbira klicatelj.');
+    if (fourthCard) room.trumpSuit = room.pendingSecond[index]?.[0]?.suit;
+    else if (SUITS.includes(suit)) room.trumpSuit = suit;
+    else return emitError(socket, 'Neveljaven adut.');
+    for (let i = 0; i < 3; i++) room.hands[i].push(...room.pendingSecond[i]);
+    room.pendingSecond = []; room.phase = 'talon_exchange'; emitRoom(room);
+  });
+  socket.on('exchangeTalon', ({ cardIds = [] } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'talon_exchange' || room.playerCount !== 3) return;
+    const { index } = playerBySocket(room, socket.id); if (index !== room.callerIndex) return emitError(socket, 'Talon menja klicatelj.');
+    if (cardIds.length === 2) {
+      const selected = cardIds.map((id) => room.hands[index].find((c) => c.id === id));
+      if (selected.some((c) => !c)) return emitError(socket, 'Neveljavne karte.');
+      room.hands[index] = room.hands[index].filter((c) => !cardIds.includes(c.id)).concat(room.talon); room.talon = selected;
+    }
+    // 3-player ostane na starem osnovnem toku; natančna pravila pridejo posebej.
+    room.contract = 'normal'; room.bidderIndex = room.callerIndex; room.phase = 'playing'; room.turnIndex = room.callerIndex; room.trickLeader = room.callerIndex; emitRoom(room);
   });
 
   socket.on('bid', ({ contract } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'auction' || !room.auction) return;
-    const { index } = playerBySocket(room, socket.id);
-    if (index !== room.auction.currentIndex) return emitError(socket, 'Nisi na vrsti za licitacijo.');
-    if (room.auction.passed[index]) return emitError(socket, 'Po pasu ne mores znova licitirati.');
-
+    const room = roomForSocket(socket); if (!room || room.phase !== 'auction' || !room.auction) return;
+    const { index } = playerBySocket(room, socket.id); if (index !== room.auction.currentIndex) return emitError(socket, 'Nisi na vrsti za licitacijo.');
     if (contract === 'pass') {
-      room.auction.passed[index] = true;
-      log(room, `${room.players[index].name}: pas.`);
+      room.auction.totalPasses += 1; room.auction.passesSinceBid += 1; log(room, `${room.players[index].name}: dalje.`);
     } else {
-      if (!CONTRACTS[contract]) return emitError(socket, 'Neznana igra.');
+      if (!CONTRACTS[contract] || contract === 'normal') return emitError(socket, 'Izberi eno od iger 6, 7, 9, 12, 18 ali 24.');
+      const currentValue = room.auction.best?.value || 0;
       const value = CONTRACTS[contract].value;
-      if (value < room.auction.best.value) return emitError(socket, 'Ponudba mora biti vsaj tako visoka kot trenutna.');
-      room.auction.best = { contract, playerIndex: index, value };
-      log(room, `${room.players[index].name}: ${CONTRACTS[contract].label}.`);
+      if (value <= currentValue) return emitError(socket, 'Višati moraš na višjo igro.');
+      if (!canBidInstant(room, index, contract)) return emitError(socket, contract === 'eighteen' ? '18 lahko kličeš samo s 5 kartami iste barve.' : '24 lahko kličeš samo s 5 aduti.');
+      room.auction.best = { contract, playerIndex: index, value }; room.auction.passesSinceBid = 0;
+      log(room, `${room.players[index].name}: višam na ${CONTRACTS[contract].label}.`);
     }
+    if (!room.auction.best && room.auction.totalPasses >= 4) { finishAuction(room); return emitRoom(room); }
+    if (room.auction.best && room.auction.passesSinceBid >= 3) { finishAuction(room); return emitRoom(room); }
+    room.auction.currentIndex = nextIndex(room, index); emitRoom(room);
+  });
 
-    room.auction.turns += 1;
-    const active = room.players.map((_p, i) => i).filter((i) => !room.auction.passed[i]);
-    if (active.length <= 1 || room.auction.turns >= room.playerCount * 2) {
-      return finishAuction(room), emitRoom(room);
+  socket.on('contraAction', ({ action } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'contra' || !room.contra) return;
+    const { index } = playerBySocket(room, socket.id);
+    if (teamOf(index) !== room.contra.actionTeam) return emitError(socket, 'Trenutno je na vrsti druga ekipa.');
+    if (action === 'raise') {
+      if (room.contra.stage === 0) { room.multiplier = 2; room.contra.stage = 1; room.contra.actionTeam = teamOf(room.bidderIndex); log(room, `${room.players[index].name}: KONTRA (x2).`); }
+      else if (room.contra.stage === 1) { room.multiplier = 3; room.contra.stage = 2; room.contra.actionTeam = otherTeam(teamOf(room.bidderIndex)); log(room, `${room.players[index].name}: KONTRA NAZAJ (x3).`); }
+      else if (room.contra.stage === 2) { room.multiplier = 4; log(room, `${room.players[index].name}: DO KONCA (x4).`); beginPlay(room); return emitRoom(room); }
+      room.contra.passed = []; return emitRoom(room);
     }
-
-    let next = nextIndex(room, index);
-    let guard = 0;
-    while (room.auction.passed[next] && guard < room.playerCount) {
-      next = nextIndex(room, next);
-      guard += 1;
+    if (action === 'pass') {
+      if (!room.contra.passed.includes(index)) room.contra.passed.push(index);
+      const members = teamMembers(room.contra.actionTeam);
+      if (members.every((i) => room.contra.passed.includes(i))) { beginPlay(room); return emitRoom(room); }
+      return emitRoom(room);
     }
-    room.auction.currentIndex = next;
-    emitRoom(room);
   });
 
   socket.on('declareMeld', ({ suit } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room) return;
+    const room = roomForSocket(socket); if (!room) return;
     const { index } = playerBySocket(room, socket.id);
-    const eligible = eligibleMelds(room, index);
-    const meld = eligible.find((m) => m.suit === suit);
-    if (!meld) return emitError(socket, 'Te napovedi trenutno ne mores narediti.');
+    const meld = eligibleMelds(room, index).find((m) => m.suit === suit);
+    if (!meld) return emitError(socket, 'Te napovedi trenutno ne moreš narediti.');
     room.melds.push({ playerIndex: index, suit, points: meld.points, activated: false });
     log(room, `${room.players[index].name} napove ${meld.points}.`);
+    activatePendingMelds(room, teamOf(index)); emitRoom(room);
+  });
+
+  socket.on('countPoints', () => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'playing' || room.contract !== 'normal' || room.playerCount !== 4) return;
+    const { index } = playerBySocket(room, socket.id); const team = teamOf(index);
+    if (room.trick.length || room.lastTrickWinner === null || teamOf(room.lastTrickWinner) !== team) return emitError(socket, 'Šteješ lahko po štihu, ki ga je pobrala tvoja ekipa.');
+    const score = teamRoundScore(room, team);
+    log(room, `${room.players[index].name} reče: ŠTEJEM (${score}).`);
+    if (!normalFinishByCount(room, team)) log(room, `Ni dovolj: ekipa ima ${score}, potrebuje 66.`);
+    emitRoom(room);
+  });
+
+  socket.on('closeSchnops', () => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'playing' || room.contract !== 'schnops') return;
+    const { index } = playerBySocket(room, socket.id); if (index !== room.bidderIndex) return emitError(socket, 'Zapre lahko samo igralec, ki igra Šnops.');
+    if (room.trick.length || room.trickNo < 1) return emitError(socket, 'Zapreš lahko po osvojenem štihu.');
+    activatePendingMelds(room, teamOf(index));
+    const score = teamRoundScore(room, teamOf(index));
+    log(room, `${room.players[index].name} reče: ZAPREM (${score}).`);
+    if (score >= 66) finishRound(room, teamOf(index), otherTeam(teamOf(index)), 6, `Šnops zaprt pri ${score} točkah.`);
+    else finishRound(room, otherTeam(teamOf(index)), teamOf(index), 6, `Prezgodaj zaprt Šnops: samo ${score} točk.`);
     emitRoom(room);
   });
 
   socket.on('playCard', ({ cardId } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'playing') return;
-    const { index } = playerBySocket(room, socket.id);
-    if (index !== room.turnIndex) return emitError(socket, 'Nisi na potezi.');
+    const room = roomForSocket(socket); if (!room || room.phase !== 'playing') return;
+    const { index } = playerBySocket(room, socket.id); if (index !== room.turnIndex) return emitError(socket, 'Nisi na potezi.');
     if (!legalCardIds(room, index).includes(cardId)) return emitError(socket, 'Ta karta po pravilih trenutno ni dovoljena.');
-    const cardIndex = room.hands[index].findIndex((c) => c.id === cardId);
-    if (cardIndex < 0) return emitError(socket, 'Karte nimas v roki.');
-    const [card] = room.hands[index].splice(cardIndex, 1);
-    room.trick.push({ playerIndex: index, card });
-    revealCalledPartnerIfNeeded(room, card, index);
-
-    if (room.trick.length === room.playerCount) resolveTrick(room);
-    else room.turnIndex = nextIndex(room, index);
+    const cardIndex = room.hands[index].findIndex((c) => c.id === cardId); if (cardIndex < 0) return emitError(socket, 'Karte nimaš v roki.');
+    const [card] = room.hands[index].splice(cardIndex, 1); room.trick.push({ playerIndex: index, card });
+    if (room.trick.length === room.playerCount) resolveTrick(room); else room.turnIndex = nextIndex(room, index);
     emitRoom(room);
   });
 
   socket.on('nextRound', () => {
-    const room = roomForSocket(socket);
-    if (!room || room.phase !== 'round_end') return;
-    const { player } = playerBySocket(room, socket.id);
-    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj zacne naslednjo rundo.');
-    startRound(room);
-    emitRoom(room);
+    const room = roomForSocket(socket); if (!room || room.phase !== 'round_end') return;
+    const { player } = playerBySocket(room, socket.id); if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj začne naslednjo rundo.');
+    startRound(room); emitRoom(room);
   });
 
-  socket.on('adjustScore', ({ playerIndex, delta } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room) return;
-    const { player } = playerBySocket(room, socket.id);
-    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko popravi rezultat.');
-    const i = Number(playerIndex);
-    const d = Number(delta);
-    if (!Number.isInteger(i) || i < 0 || i >= room.playerCount || ![-1, 1].includes(d)) return;
-    room.matchPoints[i] = Math.max(0, room.matchPoints[i] + d);
-    log(room, `Rezultat ${room.players[i].name} je rocno popravljen za ${d > 0 ? '+' : ''}${d}.`);
-    emitRoom(room);
+  socket.on('adjustScore', ({ team, delta } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.playerCount !== 4) return;
+    const { player } = playerBySocket(room, socket.id); if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko popravi rezultat.');
+    const t = Number(team), d = Number(delta); if (![0,1].includes(t) || ![-1,1].includes(d)) return;
+    room.teamPenalty[t] = Math.max(0, room.teamPenalty[t] + d); log(room, `Rezultat ekipe ${t + 1} popravljen za ${d > 0 ? '+' : ''}${d}.`); emitRoom(room);
   });
 
   socket.on('chat', ({ text } = {}) => {
-    const room = roomForSocket(socket);
-    if (!room) return;
-    const { player } = playerBySocket(room, socket.id);
-    const clean = String(text || '').trim().slice(0, 180);
+    const room = roomForSocket(socket); if (!room) return;
+    const { player } = playerBySocket(room, socket.id); const clean = String(text || '').trim().slice(0, 180);
     if (!player || !clean) return;
     room.chat.push({ id: `${Date.now()}-${Math.random()}`, name: player.name, text: clean, at: Date.now() });
-    if (room.chat.length > 50) room.chat.shift();
-    emitRoom(room);
+    if (room.chat.length > 50) room.chat.shift(); emitRoom(room);
   });
 
   socket.on('disconnect', () => {
     for (const room of rooms.values()) {
-      const player = room.players.find((p) => p.socketId === socket.id);
-      if (!player) continue;
-      player.connected = false;
-      player.socketId = null;
-      log(room, `${player.name} je izgubil povezavo - lahko se vrne z istim telefonom.`);
-      emitRoom(room);
-      break;
+      const player = room.players.find((p) => p.socketId === socket.id); if (!player) continue;
+      player.connected = false; player.socketId = null; log(room, `${player.name} je izgubil povezavo - lahko se vrne z istim telefonom.`); emitRoom(room); break;
     }
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Snops Online tece na http://localhost:${PORT}`);
-});
+server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
