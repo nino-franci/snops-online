@@ -481,7 +481,7 @@ function botChooseBid(room, index) {
 }
 
 function botDoAction(room) {
-  if (!room || room.botBusy) return false;
+  if (!room) return false;
   let idx = null;
   if (room.phase === 'cut') idx = room.cutterIndex;
   else if (room.phase === 'choose_call') idx = room.callerIndex;
@@ -860,4 +860,12 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+}
+
+module.exports = {
+  createRoom,
+  startRound,
+  scheduleBot
+};
