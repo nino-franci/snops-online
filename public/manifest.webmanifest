@@ -1,0 +1,9 @@
+{
+  "name": "Šnops Online",
+  "short_name": "Šnops",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b2419",
+  "theme_color": "#143d2a",
+  "description": "Družinska online igra Šnops za 3 ali 4 igralce."
+}

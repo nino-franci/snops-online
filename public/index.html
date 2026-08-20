@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#143d2a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Šnops Online</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div>
+        <div class="brand">🃏 Šnops Online</div>
+        <div class="subbrand">družinska igra za 3 ali 4 telefone</div>
+      </div>
+      <button id="installBtn" class="ghost hidden">Namesti</button>
+    </header>
+
+    <main>
+      <section id="homeView" class="panel home-grid">
+        <div class="hero-card">
+          <h1>Igrajte skupaj, vsak na svojem telefonu.</h1>
+          <p>Ustvarite sobo, pošljite 5-mestno kodo družini in igrajte v živo. Karte drugih igralcev ostanejo skrite.</p>
+          <div class="feature-row">
+            <span>📱 mobile-first</span><span>🌐 online</span><span>🏆 rezultat do 25</span>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <label>Ime</label>
+          <input id="nameInput" maxlength="20" autocomplete="nickname" placeholder="npr. Mami" />
+
+          <div class="segmented" aria-label="Število igralcev">
+            <button class="seg active" data-count="4">4 igralci</button>
+            <button class="seg" data-count="3">3 igralci</button>
+          </div>
+
+          <label>Ciljni rezultat</label>
+          <input id="targetScoreInput" type="number" min="7" max="99" value="25" />
+          <button id="createBtn" class="primary big">Ustvari sobo</button>
+
+          <div class="divider"><span>ali</span></div>
+          <label>Koda sobe</label>
+          <div class="join-row">
+            <input id="roomCodeInput" maxlength="5" autocapitalize="characters" placeholder="ABCDE" />
+            <button id="joinBtn" class="secondary">Pridruži se</button>
+          </div>
+          <p id="homeError" class="error"></p>
+        </div>
+      </section>
+
+      <section id="gameView" class="hidden">
+        <div class="room-strip panel compact">
+          <div>
+            <span class="muted">Soba</span>
+            <strong id="roomCode">-----</strong>
+          </div>
+          <button id="shareBtn" class="ghost">Deli kodo</button>
+          <div id="connectionBadge" class="status online">online</div>
+        </div>
+
+        <section class="scoreboard panel" id="scoreboard"></section>
+
+        <section class="table panel">
+          <div class="table-head">
+            <div>
+              <span id="phaseLabel" class="eyebrow">Čakanje</span>
+              <h2 id="statusTitle">Priprava igre</h2>
+            </div>
+            <div class="round-pill">Runda <span id="roundNo">0</span></div>
+          </div>
+
+          <div id="gameInfo" class="game-info"></div>
+          <div id="playersAround" class="players-around"></div>
+          <div id="trickArea" class="trick-area"></div>
+          <div id="actionArea" class="action-area"></div>
+          <div id="handArea" class="hand-area"></div>
+        </section>
+
+        <section class="panel tabs-panel">
+          <div class="tabs">
+            <button class="tab active" data-tab="log">Dogajanje</button>
+            <button class="tab" data-tab="chat">Klepet</button>
+            <button class="tab" data-tab="rules">Pravila</button>
+          </div>
+          <div id="logTab" class="tab-body"></div>
+          <div id="chatTab" class="tab-body hidden">
+            <div id="chatMessages" class="chat-messages"></div>
+            <form id="chatForm" class="chat-form">
+              <input id="chatInput" maxlength="180" placeholder="Sporočilo ..." />
+              <button class="secondary" type="submit">Pošlji</button>
+            </form>
+          </div>
+          <div id="rulesTab" class="tab-body hidden rules-copy">
+            <h3>Vgrajena hišna pravila</h3>
+            <p><b>Karte:</b> 20 kart: fant, dama, kralj, 10, as. Vrednosti so 2, 3, 4, 10 in 11.</p>
+            <p><b>3 igralci:</b> 3 karte vsakemu, 2 v talon, nato še 3. Prvi za delilcem izbere adut ali odpre 4. karto. Nato lahko zamenja 2 karti s talonom.</p>
+            <p><b>4 igralci:</b> 3 karte vsakemu, prvi za delilcem rufa karto (barvo + vrednost), nato se razdeli še po 2. Imetnik rufane karte je partner.</p>
+            <p><b>Štih:</b> obvezno je barvati; če lahko, moraš preštihati. Če nimaš barve, moraš dati aduta; če nimaš niti aduta, lahko odvržeš poljubno.</p>
+            <p><b>20/40:</b> kralj + dama iste barve ob začetku štiha. Navadna barva šteje 20, adut 40. Točke se aktivirajo, ko tvoja stran pobere štih.</p>
+            <p><b>Navadna igra:</b> 66 točk ali zadnji štih. Zmagovalci dobijo 1, 2 ali 3 igralne točke glede na rezultat poražencev.</p>
+            <p><b>Posebne igre:</b> Šnops 6, Berač 7, Durhmarš 9, Paver 12. Ker se regionalna pravila razlikujejo, so zbrana v strežniški datoteki in jih lahko prilagodite.</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
