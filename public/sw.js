@@ -1,5 +1,8 @@
-const CACHE = 'snops-online-v1';
-const ASSETS = ['/', '/style.css', '/app.js', '/manifest.webmanifest'];
+const CACHE = 'snops-online-v2';
+const CARD_ASSETS = ['J', 'Q', 'K', '10', 'A'].flatMap((rank) =>
+  ['C', 'D', 'H', 'S'].map((suit) => `/cards/${rank}${suit}.png`)
+);
+const ASSETS = ['/', '/style.css', '/app.js', '/manifest.webmanifest', ...CARD_ASSETS];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

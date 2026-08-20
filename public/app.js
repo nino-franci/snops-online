@@ -10,7 +10,6 @@ const targetScoreInput = $('#targetScoreInput');
 const homeError = $('#homeError');
 const toastEl = $('#toast');
 const connectionBadge = $('#connectionBadge');
-const appVersion = $('#appVersion');
 
 const suitSymbol = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
 const suitName = { hearts: 'srce', diamonds: 'kara', clubs: 'križ', spades: 'pik' };
@@ -23,22 +22,20 @@ let deferredInstall = null;
 let seatSwapFrom = null;
 let focusEnabled = localStorage.getItem('snops-focus') === '1';
 let strictRulesChoice = true;
+let trickAnimationTimer = null;
+
+const cardAssetUrls = ['J','Q','K','10','A'].flatMap((rank) =>
+  ['C','D','H','S'].map((suit) => `/cards/${rank}${suit}.png`)
+);
 
 nameInput.value = localStorage.getItem('snops-name') || '';
 roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
 
-function updateAppMeta(meta) {
-  if (!appVersion || !meta) return;
-  appVersion.textContent = meta.version || '1.0';
-}
-
-async function loadAppMeta() {
-  try {
-    const response = await fetch('/app-meta');
-    if (!response.ok) return;
-    updateAppMeta(await response.json());
-  } catch (_error) {
-    // Verzija ostane privzeta, če podatki strežnika niso dosegljivi.
+function preloadCardAssets() {
+  for (const url of cardAssetUrls) {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
   }
 }
 
@@ -127,6 +124,7 @@ function phaseText() {
   if (p === 'talon_exchange') return ['Talon', `${state.players[state.callerIndex].name} ureja talon`];
   if (p === 'auction') return ['Licitacija', `${state.players[state.auction.currentIndex].name} je na vrsti`];
   if (p === 'contra') return ['Kontra', `Vrednost igre ×${state.multiplier}`];
+  if (p === 'playing' && state.trickCollectAt) return ['Štih', `${state.players[state.trickWinner]?.name || ''} pobere`];
   if (p === 'playing') return ['Igra', `${state.players[state.turnIndex]?.name || ''} je na potezi`];
   if (p === 'round_end') return ['Konec runde', 'Rezultat runde je zapisan'];
   if (p === 'match_end') return ['Konec partije', 'Dosežen je rezultat 25'];
@@ -207,12 +205,33 @@ function renderTrick() {
     return;
   }
   const meld = state.meldDisplay;
-  area.innerHTML = `<div class="trick-cross">${state.trick.map((p) => {
+  const collecting = state.trickCollectAt && Date.now() >= state.trickCollectAt;
+  const winnerSeat = Number.isInteger(state.trickWinner) ? relativeSeat(state.trickWinner) : '';
+  area.innerHTML = `<div class="trick-cross ${collecting ? `collecting collect-${winnerSeat}` : ''}">${state.trick.map((p) => {
     const extra = meld && meld.playerIndex === p.playerIndex
       ? `<div class="meld-pair-preview"><div class="meld-main">${cardHTML(p.card)}</div><div class="meld-ghost">${cardHTML(meld.shownCard,{ghost:true})}</div><span class="meld-badge">${meld.points}</span></div>`
       : cardHTML(p.card);
     return `<div class="played ${relativeSeat(p.playerIndex)}">${extra}</div>`;
   }).join('')}</div>`;
+}
+
+function renderTip() {
+  const tip = $('#gameTip');
+  if (state.phase !== 'playing') { tip.innerHTML = ''; tip.classList.add('hidden'); return; }
+  let text = 'Karte drugih igralcev ostanejo skrite.';
+  if (state.trickCollectAt) text = 'Poglej štih — karte bodo pobrane čez trenutek.';
+  else if (state.me === state.turnIndex) text = 'Tvoja poteza: izberi označeno karto.';
+  else if (state.strictRules) text = 'Stroga pravila samodejno označijo dovoljene karte.';
+  tip.innerHTML = `<span aria-hidden="true">💡</span><span>${safe(text)}</span>`;
+  tip.classList.remove('hidden');
+}
+
+function scheduleTrickAnimation() {
+  clearTimeout(trickAnimationTimer);
+  trickAnimationTimer = null;
+  if (!state?.trickCollectAt) return;
+  const delay = state.trickCollectAt - Date.now();
+  if (delay > 0) trickAnimationTimer = setTimeout(() => { renderTrick(); renderTip(); }, delay);
 }
 
 function renderLobbyActions() {
@@ -389,7 +408,7 @@ function render() {
   focusToggle.textContent = focusOn ? 'Izhod iz fokusa' : 'Fokus';
   gameView.classList.toggle('seating-mode', state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4);
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
-  renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderActions(); renderHand(); renderLogs();
+  renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderTip(); renderActions(); renderHand(); renderLogs(); scheduleTrickAnimation();
 }
 
 $$('[data-count]').forEach((b)=>b.addEventListener('click',()=>{ $$('[data-count]').forEach((x)=>x.classList.remove('active')); b.classList.add('active'); playerCount=Number(b.dataset.count); }));
@@ -424,5 +443,5 @@ socket.on('connect',()=>{
 socket.on('disconnect',()=>{ connectionBadge.textContent='brez povezave'; connectionBadge.className='status offline'; });
 window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredInstall=e;$('#installBtn').classList.remove('hidden');});
 $('#installBtn').addEventListener('click',async()=>{if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('#installBtn').classList.add('hidden');});
-loadAppMeta();
+preloadCardAssets();
 if('serviceWorker'in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

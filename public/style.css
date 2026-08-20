@@ -355,3 +355,85 @@ body.focus-active main { padding-top:0; }
 .bot-manager { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:10px; }
 .bot-manager button { min-height:38px; }
 .bot-note { text-align:center; font-size:.72rem; margin:8px 0 0; }
+
+/* --- Realistic mobile table and trick collection --- */
+body.focus-active,
+#gameView.focus-mode {
+  background:
+    linear-gradient(90deg, rgba(50,24,9,.96), rgba(91,49,21,.96) 12%, rgba(52,25,10,.96) 24%, rgba(98,53,23,.96) 42%, rgba(54,26,10,.96) 64%, rgba(91,47,19,.96));
+}
+.table {
+  background: linear-gradient(155deg, rgba(23,71,47,.98), rgba(8,42,27,.99));
+}
+.play-zone {
+  isolation:isolate;
+  border: clamp(7px, 2.2vw, 16px) solid #6f3c1e;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,222,157,.2),
+    inset 0 18px 42px rgba(255,255,255,.055),
+    inset 0 -26px 58px rgba(0,0,0,.3),
+    0 14px 30px rgba(0,0,0,.32);
+  background: radial-gradient(ellipse at 48% 44%, #28704b 0%, #185a3b 55%, #0b3e28 100%);
+  overflow:hidden;
+}
+.felt-grain {
+  position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.2;
+  background-image:
+    repeating-linear-gradient(24deg, transparent 0 3px, rgba(255,255,255,.035) 3px 4px),
+    repeating-linear-gradient(114deg, transparent 0 4px, rgba(0,0,0,.045) 4px 5px);
+  mix-blend-mode:soft-light;
+}
+.players-around,.trick-area { z-index:2; }
+.table-seat {
+  backdrop-filter:blur(7px);
+  background:linear-gradient(180deg,rgba(8,30,19,.94),rgba(4,20,13,.96));
+  border-color:rgba(255,235,190,.18);
+}
+.trick-cross .played {
+  transition:filter .2s ease;
+  will-change:transform,opacity;
+}
+.trick-cross.collecting { --collect-x:0%; --collect-y:0%; }
+.trick-cross.collect-seat-bottom { --collect-x:0%; --collect-y:230%; }
+.trick-cross.collect-seat-top { --collect-x:0%; --collect-y:-230%; }
+.trick-cross.collect-seat-left { --collect-x:-230%; --collect-y:0%; }
+.trick-cross.collect-seat-right { --collect-x:230%; --collect-y:0%; }
+.trick-cross.collecting .played {
+  animation:collect-trick .5s cubic-bezier(.5,.05,.35,1) forwards;
+  pointer-events:none;
+}
+@keyframes collect-trick {
+  0% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  72% { opacity:1; }
+  100% { opacity:0; transform:translate(calc(-50% + var(--collect-x)),calc(-50% + var(--collect-y))) scale(.62) rotate(7deg); }
+}
+.game-tip {
+  width:max-content; max-width:min(88%,390px); margin:-3px auto 7px; padding:6px 10px;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  border:1px solid rgba(255,255,255,.1); border-radius:999px;
+  background:rgba(3,24,15,.62); color:rgba(239,245,235,.72);
+  font-size:.69rem; line-height:1.25; text-align:center;
+}
+.game-tip.hidden { display:none; }
+.card-art { content-visibility:auto; }
+
+@media (max-width:719px) {
+  body { background:#0b2418; }
+  #gameView .table { border-radius:22px; padding:10px; min-height:0; }
+  #gameView .play-zone { min-height:clamp(330px,52dvh,470px); margin:6px 0; border-radius:48% / 40%; }
+  #gameView .table-head h2 { font-size:1.05rem; }
+  #gameView .game-info { margin:7px 0; gap:5px; }
+  #gameView .info-pill { padding:5px 7px; font-size:.68rem; }
+  #gameView .action-box { padding:9px 10px; }
+  #gameView .hand-scroll { justify-content:center; gap:0; overflow:visible; padding-inline:5px; }
+  #gameView .hand-scroll .card { flex-basis:min(21vw,76px); width:min(21vw,76px); margin-left:-10px; }
+  #gameView .hand-scroll .card:first-child { margin-left:0; }
+  #gameView .trick-cross .played .card { width:clamp(49px,15vw,60px); }
+  #gameView .table-seat { min-width:76px; max-width:104px; padding:5px 7px; }
+  #gameView .site-footer { padding-bottom:8px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .trick-cross.collecting .played { animation-duration:.01ms; }
+  .hand-scroll .card,.small-played { transition:none; }
+}

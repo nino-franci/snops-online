@@ -84,9 +84,11 @@
 
           <div id="gameInfo" class="game-info"></div>
           <div class="play-zone">
+            <div class="felt-grain" aria-hidden="true"></div>
             <div id="playersAround" class="players-around"></div>
             <div id="trickArea" class="trick-area"></div>
           </div>
+          <aside id="gameTip" class="game-tip" aria-live="polite"></aside>
           <div id="actionArea" class="action-area"></div>
           <div id="handArea" class="hand-area"></div>
         </section>
@@ -129,8 +131,6 @@
 
     <footer class="site-footer" aria-label="Podatki o aplikaciji">
       <span>Avtor: Nino Franci</span>
-      <span aria-hidden="true">·</span>
-      <span>Verzija <span id="appVersion">1.0</span></span>
     </footer>
 
     <div id="toast" class="toast hidden"></div>

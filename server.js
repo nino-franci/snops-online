@@ -34,6 +34,8 @@ const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS = ['J', 'Q', 'K', '10', 'A'];
 const CARD_POINTS = { J: 2, Q: 3, K: 4, '10': 10, A: 11 };
 const RANK_POWER = { J: 1, Q: 2, K: 3, '10': 4, A: 5 };
+const TRICK_REVIEW_MS = 1500;
+const TRICK_COLLECT_MS = 500;
 
 const CONTRACTS = {
   normal: { label: 'Navadna igra', value: 1, trump: true, melds: true },
@@ -96,6 +98,7 @@ function createRoom(hostSocket, payload) {
     trumpSuit: null, auction: null, contract: null, bidderIndex: null,
     contra: null, multiplier: 1,
     trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [], meldDisplay: null,
+    trickWinner: null, trickCollectAt: null, trickResolveTimer: null,
     roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
@@ -129,6 +132,10 @@ function startRound(room) {
   room.lastTrickWinner = null;
   room.smallHistory = [];
   room.meldDisplay = null;
+  room.trickWinner = null;
+  room.trickCollectAt = null;
+  if (room.trickResolveTimer) clearTimeout(room.trickResolveTimer);
+  room.trickResolveTimer = null;
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
   room.captured = Array.from({ length: room.playerCount }, () => []);
@@ -416,6 +423,20 @@ function resolveTrick(room) {
   return resolveStandardTrick(room);
 }
 
+function queueTrickResolution(room) {
+  if (room.trickResolveTimer || room.trick.length !== room.playerCount) return;
+  room.trickWinner = room.contract === 'small' ? room.bidderIndex : currentWinningPlay(room)?.playerIndex;
+  room.trickCollectAt = Date.now() + TRICK_REVIEW_MS;
+  room.turnIndex = null;
+  room.trickResolveTimer = setTimeout(() => {
+    room.trickResolveTimer = null;
+    resolveTrick(room);
+    room.trickWinner = null;
+    room.trickCollectAt = null;
+    emitRoom(room);
+  }, TRICK_REVIEW_MS + TRICK_COLLECT_MS);
+}
+
 
 function isBotTurn(room, index) {
   return Number.isInteger(index) && room.players[index]?.isBot;
@@ -564,7 +585,7 @@ function botDoAction(room) {
     const ci = room.hands[idx].findIndex((c)=>c.id===card.id);
     room.hands[idx].splice(ci,1); room.trick.push({playerIndex:idx,card});
     log(room, `${room.players[idx].name} odigra ${card.rank}.`);
-    if (room.trick.length === room.playerCount) resolveTrick(room); else room.turnIndex = nextIndex(room,idx);
+    if (room.trick.length === room.playerCount) queueTrickResolution(room); else room.turnIndex = nextIndex(room,idx);
     return true;
   }
   return false;
@@ -611,6 +632,7 @@ function publicState(room, socketId) {
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
     trick: room.trick, smallHistory: room.smallHistory || [], meldDisplay: room.meldDisplay, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
+    trickWinner: room.trickWinner, trickCollectAt: room.trickCollectAt,
     melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }
@@ -827,7 +849,7 @@ io.on('connection', (socket) => {
     if (!legalCardIds(room, index).includes(cardId)) return emitError(socket, 'Ta karta po pravilih trenutno ni dovoljena.');
     const cardIndex = room.hands[index].findIndex((c) => c.id === cardId); if (cardIndex < 0) return emitError(socket, 'Karte nimaš v roki.');
     const [card] = room.hands[index].splice(cardIndex, 1); room.trick.push({ playerIndex: index, card });
-    if (room.trick.length === room.playerCount) resolveTrick(room); else room.turnIndex = nextIndex(room, index);
+    if (room.trick.length === room.playerCount) queueTrickResolution(room); else room.turnIndex = nextIndex(room, index);
     emitRoom(room);
   });
 
@@ -867,5 +889,8 @@ if (require.main === module) {
 module.exports = {
   createRoom,
   startRound,
-  scheduleBot
+  scheduleBot,
+  queueTrickResolution,
+  TRICK_REVIEW_MS,
+  TRICK_COLLECT_MS
 };
