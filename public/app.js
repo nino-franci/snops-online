@@ -66,8 +66,8 @@ function roleLabel(index) {
   if (!state) return '';
   const roles = [];
   if (index === state.dealerIndex) roles.push('deli');
-  if (index === state.cutterIndex && state.playerCount === 4) roles.push('predvig/udarec');
-  if (index === state.callerIndex) roles.push('rufa');
+  if (index === state.cutterIndex && state.playerCount === 4) roles.push('desno od delivca: predvig/udarec');
+  if (index === state.callerIndex) roles.push('levo od delivca: rufa');
   if (state.bidderIndex === index) roles.push('igra');
   return roles.join(' · ');
 }
@@ -108,41 +108,63 @@ function phaseText() {
 
 function renderGameInfo() {
   const pills = [];
-  if (state.playerCount === 4 && state.players.length === 4) pills.push(`<b>Pari:</b> ${safe(state.players[0].name)} + ${safe(state.players[2].name)} / ${safe(state.players[1].name)} + ${safe(state.players[3].name)}`);
-  if (state.trumpSuit) pills.push(`Adut: <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
-  if (state.contract) pills.push(`Igra: <b>${safe(state.contracts[state.contract].label)}</b>`);
-  if (state.multiplier > 1) pills.push(`Kontra: <b>×${state.multiplier}</b>`);
-  if (state.talonCount) pills.push(`Talon: <b>${state.talonCount}</b>`);
+  if (state.phase === 'playing') {
+    if (state.trumpSuit && ['normal','schnops','big_trump'].includes(state.contract)) pills.push(`Adut <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
+    else pills.push('<b>Brez aduta</b>');
+    const turnName = state.players[state.turnIndex]?.name || '';
+    pills.push(`Na vrsti <b>${safe(turnName)}${state.turnIndex===state.me?' (ti)':''}</b>`);
+  } else {
+    if (state.playerCount === 4 && state.players.length === 4) pills.push(`<b>Pari:</b> ${safe(state.players[0].name)} + ${safe(state.players[2].name)} / ${safe(state.players[1].name)} + ${safe(state.players[3].name)}`);
+    if (state.trumpSuit) pills.push(`Adut: <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
+    if (state.contract) pills.push(`Igra: <b>${safe(state.contracts[state.contract].label)}</b>`);
+    if (state.multiplier > 1) pills.push(`Kontra: <b>×${state.multiplier}</b>`);
+  }
   $('#gameInfo').innerHTML = pills.map((p) => `<span class="info-pill">${p}</span>`).join('');
 }
 
+function relativeSeat(index) {
+  if (state.playerCount !== 4 || state.me < 0) return 'seat-inline';
+  const delta = (index - state.me + 4) % 4;
+  return ['seat-bottom','seat-right','seat-top','seat-left'][delta];
+}
+function cardBacks(count) {
+  const visible = Math.min(5, Math.max(0, count));
+  return `<div class="back-fan" aria-label="${count} skritih kart">${Array.from({length:visible},()=>'<span class="mini-back"></span>').join('')}</div>`;
+}
 function renderPlayersAround() {
-  $('#playersAround').innerHTML = state.players.map((p) => `<div class="player-chip ${state.turnIndex===p.index?'turn':''} team-${p.team ?? 'x'}">
-    <div><b>${safe(p.name)}</b>${p.index===state.me?' <span class="muted">(ti)</span>':''}</div>
-    <div class="meta"><span>${p.handCount} kart</span><span>${roleLabel(p.index)}</span></div>
-  </div>`).join('');
+  $('#playersAround').innerHTML = state.players.map((p) => {
+    const mine = p.index === state.me;
+    const partner = state.playerCount===4 && ((p.index-state.me+4)%4===2);
+    const turn = state.turnIndex===p.index;
+    return `<div class="table-seat ${relativeSeat(p.index)} ${turn?'turn':''} ${mine?'mine':''}">
+      <div class="seat-name">${turn?'<span class="turn-dot"></span>':''}<b>${safe(p.name)}</b>${mine?' <span class="you">ti</span>':partner?' <span class="partner">partner</span>':''}</div>
+      ${mine ? `<span class="seat-meta">${p.handCount} kart</span>` : cardBacks(p.handCount)}
+    </div>`;
+  }).join('');
 }
 
 function renderTrick() {
   const area = $('#trickArea');
   if (!state.trick.length) {
-    area.innerHTML = `<div class="empty-table">${state.phase==='playing'?'Miza je prazna.':'Karte se bodo prikazale tukaj.'}</div>`;
+    area.innerHTML = `<div class="table-center-mark">${state.phase==='playing'?'Šnops':'Miza'}</div>`;
     return;
   }
-  area.innerHTML = `<div class="trick-grid">${state.trick.map((p) => `<div class="played"><span class="played-name">${safe(state.players[p.playerIndex].name)}</span>${cardHTML(p.card)}</div>`).join('')}</div>`;
+  area.innerHTML = `<div class="trick-cross">${state.trick.map((p) => `<div class="played ${relativeSeat(p.playerIndex)}">${cardHTML(p.card)}</div>`).join('')}</div>`;
 }
 
 function renderLobbyActions() {
   const me = state.players[state.me];
   const full = state.players.length === state.playerCount;
+  const seatNames = ['Spodaj / sedež 1','Desno / sedež 2','Nasproti / sedež 3','Levo / sedež 4'];
+  const manager = me?.isHost && state.playerCount===4 ? `<div class="team-manager"><h4>Razporedi sedeže in ekipe</h4><p class="muted">Partnerja morata biti nasproti: sedeža 1+3 in 2+4.</p>${state.players.map((p)=>`<div class="seat-row"><span><b>${p.index+1}. ${safe(p.name)}</b> <small>${p.index%2===0?'Ekipa 1':'Ekipa 2'}</small></span><select data-seat-player="${p.index}">${state.players.map((_,i)=>`<option value="${i}" ${i===p.index?'selected':''}>${seatNames[i]}</option>`).join('')}</select></div>`).join('')}</div>` : '';
   return `<div class="action-box"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
-    <p class="muted">Pri 4 igralcih sta partnerja vedno nasproti: 1+3 proti 2+4.</p>
-    ${me?.isHost ? `<button id="startBtn" class="primary big" ${full?'':'disabled'}>Začni igro</button>` : '<p class="muted">Gostitelj bo začel.</p>'}
+    <p class="muted">Sedeži določajo pare: 1+3 proti 2+4.</p>${manager}
+    ${me?.isHost ? `<button id="startBtn" class="primary big" ${full?'':'disabled'}>Začni igro</button>` : '<p class="muted">Gostitelj razporedi ekipe in začne igro.</p>'}
   </div>`;
 }
 function renderCutActions() {
   if (state.me !== state.cutterIndex) return `<div class="action-box"><p class="muted">${safe(state.players[state.cutterIndex].name)} izbira predvig ali udarec.</p></div>`;
-  return `<div class="action-box"><h3>Predvig ali udarec?</h3><p class="muted">Predvig: 3-3-3-3, ruf, nato 2-2-2-2. Udarec: prvi dobi 3, rufa, nato še 2; ostali dobijo po 5.</p><div class="action-buttons"><button class="primary" data-cut="cut">Predvig</button><button class="secondary" data-cut="knock">Udari po kartah</button></div></div>`;
+  return `<div class="action-box"><h3>Predvig ali udarec?</h3><p class="muted">To izbira igralec desno od delivca. Predvig: igralec levo od delivca najprej dobi 3 in rufa, po 3 kartah za vse sledi se 2-2-2-2. Udarec: igralec levo od delivca dobi 3, rufa, nato se 2; ostali dobijo po 5.</p><div class="action-buttons"><button class="primary" data-cut="cut">Predvig</button><button class="secondary" data-cut="knock">Udari po kartah</button></div></div>`;
 }
 function renderCallActions() {
   if (state.me !== state.callerIndex) return `<div class="action-box"><p class="muted">Počakaj, da ${safe(state.players[state.callerIndex].name)} rufa aduta.</p></div>`;
@@ -211,6 +233,7 @@ function renderActions() {
   $('#actionArea').innerHTML = html;
 
   $('#startBtn')?.addEventListener('click', () => socket.emit('startGame'));
+  $$('[data-seat-player]').forEach((el) => el.addEventListener('change', () => socket.emit('setSeat', { playerIndex:Number(el.dataset.seatPlayer), seatIndex:Number(el.value) })));
   $('#nextRoundBtn')?.addEventListener('click', () => { selectedTalon.clear(); socket.emit('nextRound'); });
   $$('[data-cut]').forEach((b) => b.addEventListener('click', () => socket.emit('chooseCut', { mode:b.dataset.cut })));
   $$('[data-call-suit]').forEach((b) => b.addEventListener('click', () => socket.emit('chooseCall', { suit:b.dataset.callSuit })));
@@ -251,6 +274,7 @@ function renderLogs() {
 function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
+  gameView.classList.toggle('focus-mode', state.phase === 'playing');
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderActions(); renderHand(); renderLogs();
 }

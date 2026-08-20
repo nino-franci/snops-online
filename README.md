@@ -45,3 +45,14 @@ Projekt je pripravljen za Render z datoteko `render.yaml`. Repo poveži kot Blue
 ## Pomembno
 
 Pravila za **3 igralce** bomo definirali posebej. Zato je možnost ustvarjanja nove 3-igralne sobe v trenutnem uporabniškem vmesniku označena kot »kmalu« in izklopljena.
+
+### Sedezni vrstni red pri 4 igralcih
+- Igralec **desno od delivca** izbere **predvig ali udarec**.
+- Igralec **levo od delivca** dobi prve 3 karte in **rufa aduta**.
+- Partnerja sedita nasproti: sedeza 1+3 proti 2+4.
+
+## UI v3: sedezi in fokus med igro
+- Gostitelj lahko v cakalnici zamenja igralce med 4 sedezi. Sedeza 1+3 sta ekipa 1, 2+4 ekipa 2.
+- Pogled mize je na vsakem telefonu relativen igralcu: jaz spodaj, partner nasproti, nasprotnika levo/desno.
+- Karte drugih igralcev so prikazane samo s hrbtno stranjo; vsebine rok ostanejo na strezniku skrite.
+- Med dejanskim igranjem se vmesnik preklopi v focus mode: skrije rezultat, sobo, log/klepet in glavo ter poudari mizo, adut, igralca na potezi in lastne karte.

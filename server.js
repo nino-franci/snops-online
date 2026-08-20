@@ -52,6 +52,7 @@ function shuffle(items) {
   return a;
 }
 function nextIndex(room, idx) { return (idx + 1) % room.playerCount; }
+function prevIndex(room, idx) { return (idx - 1 + room.playerCount) % room.playerCount; }
 function log(room, text) {
   room.log.push({ id: `${Date.now()}-${Math.random()}`, text, at: Date.now() });
   if (room.log.length > 100) room.log.shift();
@@ -88,8 +89,10 @@ function createRoom(hostSocket, payload) {
 function startRound(room) {
   room.roundNo += 1;
   room.dealerIndex = room.roundNo === 1 ? room.dealerIndex : nextIndex(room, room.dealerIndex);
+  // Sedezni dogovor za igro na 4: igralec desno od delivca izbira predvig/udarec,
+  // igralec levo od delivca pa dobi prve karte in rufa aduta.
   room.cutterIndex = nextIndex(room, room.dealerIndex);
-  room.callerIndex = nextIndex(room, room.dealerIndex);
+  room.callerIndex = prevIndex(room, room.dealerIndex);
   room.dealMode = null;
   room.deck = shuffle(deck20());
   room.hands = Array.from({ length: room.playerCount }, () => []);
@@ -114,7 +117,7 @@ function startRound(room) {
 
   if (room.playerCount === 4) {
     room.phase = 'cut';
-    log(room, `${room.players[room.dealerIndex].name} deli. ${room.players[room.cutterIndex].name} izbere predvig ali udarec.`);
+    log(room, `${room.players[room.dealerIndex].name} deli. ${room.players[room.cutterIndex].name} (desno od delivca) izbere predvig ali udarec. ${room.players[room.callerIndex].name} (levo od delivca) bo rufal aduta.`);
   } else {
     // 3-player pravila ostajajo začasno po prejšnji različici; natančno jih bomo prilagodili posebej.
     legacyDealThree(room);
@@ -133,9 +136,13 @@ function legacyDealThree(room) {
 function dealFourFirst(room, mode) {
   room.dealMode = mode;
   if (mode === 'cut') {
-    for (let r = 0; r < 3; r++) for (let p = 0; p < 4; p++) room.hands[p].push(room.deck.shift());
+    // Prve 3 karte dobi igralec levo od delivca (caller), nato se deli po sedeznem vrstnem redu.
+    const order = [];
+    let p = room.callerIndex;
+    for (let i = 0; i < 4; i++) { order.push(p); p = nextIndex(room, p); }
+    for (let r = 0; r < 3; r++) for (const seat of order) room.hands[seat].push(room.deck.shift());
     room.pendingSecond = Array.from({ length: 4 }, () => []);
-    for (let r = 0; r < 2; r++) for (let p = 0; p < 4; p++) room.pendingSecond[p].push(room.deck.shift());
+    for (let r = 0; r < 2; r++) for (const seat of order) room.pendingSecond[seat].push(room.deck.shift());
   } else {
     // Udarec: prvi igralec dobi 3 in rufa; po rufu dobi še 2, ostali po 5.
     for (let i = 0; i < 3; i++) room.hands[room.callerIndex].push(room.deck.shift());
@@ -440,6 +447,18 @@ io.on('connection', (socket) => {
     room.players.push(player); socket.join(code); ack({ ok: true, code, token }); log(room, `${player.name} se je pridružil.`); emitRoom(room);
   });
 
+  socket.on('setSeat', ({ playerIndex, seatIndex } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'lobby' || room.playerCount !== 4) return;
+    const { player } = playerBySocket(room, socket.id);
+    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko razporeja sedeže.');
+    const from = Number(playerIndex), to = Number(seatIndex);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= room.players.length || to >= room.players.length) return;
+    if (from === to) return;
+    [room.players[from], room.players[to]] = [room.players[to], room.players[from]];
+    log(room, `Gostitelj je zamenjal sedeža ${from + 1} in ${to + 1}.`);
+    emitRoom(room);
+  });
+
   socket.on('startGame', () => {
     const room = roomForSocket(socket); if (!room) return;
     const { player } = playerBySocket(room, socket.id);
@@ -452,7 +471,7 @@ io.on('connection', (socket) => {
   socket.on('chooseCut', ({ mode } = {}) => {
     const room = roomForSocket(socket); if (!room || room.phase !== 'cut' || room.playerCount !== 4) return;
     const { index } = playerBySocket(room, socket.id);
-    if (index !== room.cutterIndex) return emitError(socket, 'Predvig ali udarec izbere igralec za delilcem.');
+    if (index !== room.cutterIndex) return emitError(socket, 'Predvig ali udarec izbere igralec desno od delivca.');
     if (!['cut', 'knock'].includes(mode)) return emitError(socket, 'Neveljavna izbira.');
     log(room, `${room.players[index].name}: ${mode === 'cut' ? 'predvig' : 'udarec po kartah'}.`);
     dealFourFirst(room, mode); emitRoom(room);
@@ -461,7 +480,7 @@ io.on('connection', (socket) => {
   socket.on('chooseCall', ({ suit } = {}) => {
     const room = roomForSocket(socket); if (!room || room.phase !== 'choose_call' || room.playerCount !== 4) return;
     const { index } = playerBySocket(room, socket.id);
-    if (index !== room.callerIndex) return emitError(socket, 'Adut rufa prvi igralec.');
+    if (index !== room.callerIndex) return emitError(socket, 'Adut rufa igralec levo od delivca.');
     if (!SUITS.includes(suit)) return emitError(socket, 'Neveljavna barva aduta.');
     room.trumpSuit = suit;
     log(room, `${room.players[index].name} rufa ${suit}.`);

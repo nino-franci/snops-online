@@ -208,3 +208,63 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .contract-btn.pass { grid-column: auto; }
   .hand-scroll .card { flex-basis: 88px; width: 88px; }
 }
+
+/* --- Focus table + lobby team manager --- */
+.team-manager { margin-top: 12px; padding: 10px; border-radius: 14px; background: rgba(0,0,0,.16); border: 1px solid var(--line); }
+.team-manager h4 { margin: 0 0 4px; }
+.seat-row { display: grid; grid-template-columns: 1fr minmax(145px, .85fr); gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.06); }
+.seat-row:first-of-type { margin-top: 8px; }
+.seat-row small { display:block; color:var(--muted); margin-top:2px; }
+.seat-row select { min-width:0; padding:8px; }
+
+.play-zone { position: relative; min-height: 350px; margin: 8px 0 4px; border-radius: 46% / 38%; background: radial-gradient(ellipse at center, rgba(63,116,83,.38), rgba(8,28,20,.15) 68%, transparent 70%); }
+.players-around { position:absolute; inset:0; display:block; margin:0; pointer-events:none; }
+.table-seat { position:absolute; z-index:4; min-width:92px; max-width:130px; text-align:center; padding:7px 9px; border:1px solid rgba(255,255,255,.12); border-radius:14px; background:rgba(8,25,18,.9); box-shadow:0 8px 20px rgba(0,0,0,.24); transform:translate(-50%,-50%); }
+.table-seat.seat-bottom { left:50%; top:91%; }
+.table-seat.seat-top { left:50%; top:9%; }
+.table-seat.seat-left { left:10%; top:50%; }
+.table-seat.seat-right { left:90%; top:50%; }
+.table-seat.turn { border-color:var(--gold); box-shadow:0 0 0 3px rgba(240,197,109,.2), 0 8px 20px rgba(0,0,0,.3); }
+.table-seat.turn .seat-name { color:var(--gold); }
+.turn-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--gold); margin-right:5px; box-shadow:0 0 10px rgba(240,197,109,.8); }
+.seat-name { font-size:.78rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.you,.partner { font-size:.62rem; color:var(--muted); font-weight:700; text-transform:uppercase; }
+.seat-meta { display:block; color:var(--muted); font-size:.68rem; margin-top:3px; }
+.back-fan { height:24px; position:relative; margin:4px auto 0; width:44px; }
+.mini-back { position:absolute; left:50%; top:2px; width:17px; height:23px; border-radius:3px; border:1px solid rgba(255,255,255,.28); background:repeating-linear-gradient(45deg,#315f47 0 4px,#183c2b 4px 8px); transform-origin:50% 140%; }
+.mini-back:nth-child(1){transform:translateX(-50%) rotate(-18deg)} .mini-back:nth-child(2){transform:translateX(-50%) rotate(-9deg)} .mini-back:nth-child(3){transform:translateX(-50%) rotate(0)} .mini-back:nth-child(4){transform:translateX(-50%) rotate(9deg)} .mini-back:nth-child(5){transform:translateX(-50%) rotate(18deg)}
+
+.trick-area { position:absolute; inset:21% 22%; min-height:0; margin:0; border:none; background:none; padding:0; display:block; }
+.trick-cross { position:relative; width:100%; height:100%; min-height:190px; }
+.trick-cross .played { position:absolute; margin:0; transform:translate(-50%,-50%); }
+.trick-cross .played.seat-bottom { left:50%; top:78%; }
+.trick-cross .played.seat-top { left:50%; top:22%; }
+.trick-cross .played.seat-left { left:25%; top:50%; }
+.trick-cross .played.seat-right { left:75%; top:50%; }
+.trick-cross .played .card { width:58px; }
+.table-center-mark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,.18); font-weight:900; letter-spacing:.16em; text-transform:uppercase; }
+
+.focus-mode .room-strip,.focus-mode .scoreboard,.focus-mode .tabs-panel,.focus-mode .table-head { display:none; }
+.focus-mode main { padding-top:6px; }
+.focus-mode .table { min-height:calc(100dvh - 12px); border-radius:0; margin:0; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:transparent; box-shadow:none; border:none; }
+.focus-mode .game-info { justify-content:center; margin:2px 0 4px; position:sticky; top:4px; z-index:10; }
+.focus-mode .game-info .info-pill { background:rgba(8,25,18,.93); font-size:.82rem; padding:7px 10px; }
+.focus-mode .play-zone { min-height:48dvh; max-height:520px; }
+.focus-mode .action-area { margin:4px 0; }
+.focus-mode .action-box { padding:8px 10px; text-align:center; background:rgba(0,0,0,.10); }
+.focus-mode .action-box h3 { display:none; }
+.focus-mode .action-box p { margin:2px 0; font-size:.75rem; }
+.focus-mode .hand-area { margin-top:2px; }
+.focus-mode .hand-title { display:none; }
+.focus-mode .hand-scroll { justify-content:center; overflow:visible; gap:0; padding:8px 0 4px; }
+.focus-mode .hand-scroll .card { flex-basis:72px; width:72px; margin-left:-13px; }
+.focus-mode .hand-scroll .card:first-child { margin-left:0; }
+
+@media (max-width: 420px) {
+  .play-zone { min-height:330px; }
+  .table-seat.seat-left { left:13%; } .table-seat.seat-right { left:87%; }
+  .table-seat { min-width:80px; max-width:105px; padding:6px; }
+  .trick-area { inset:23% 19%; }
+  .trick-cross .played .card { width:52px; }
+  .focus-mode .hand-scroll .card { flex-basis:66px; width:66px; margin-left:-15px; }
+}
