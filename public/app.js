@@ -21,6 +21,7 @@ let selectedTalon = new Set();
 let deferredInstall = null;
 let seatSwapFrom = null;
 let focusEnabled = localStorage.getItem('snops-focus') === '1';
+let strictRulesChoice = true;
 
 nameInput.value = localStorage.getItem('snops-name') || '';
 roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
@@ -119,6 +120,7 @@ function phaseText() {
 function renderGameInfo() {
   const pills = [];
   if (state.phase === 'playing') {
+    if (!focusEnabled) pills.push(`Pravila <b>${state.strictRules ? 'stroga' : 'ohlapna'}</b>`);
     if (state.trumpSuit && ['normal','schnops','big_trump'].includes(state.contract)) pills.push(`Adut <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
     else pills.push('<b>Brez aduta</b>');
     const turnName = state.players[state.turnIndex]?.name || '';
@@ -147,7 +149,7 @@ function renderPlayersAround() {
     const partner = state.playerCount===4 && ((p.index-state.me+4)%4===2);
     const turn = state.turnIndex===p.index;
     return `<div class="table-seat ${relativeSeat(p.index)} ${turn?'turn':''} ${mine?'mine':''}">
-      <div class="seat-name">${turn?'<span class="turn-dot"></span>':''}<b>${safe(p.name)}</b>${mine?' <span class="you">ti</span>':partner?' <span class="partner">partner</span>':''}</div>
+      <div class="seat-name">${turn?'<span class="turn-dot"></span>':''}<b>${p.isBot?'🤖 ':''}${safe(p.name)}</b>${mine?' <span class="you">ti</span>':partner?' <span class="partner">partner</span>':''}</div>
       ${mine ? `<span class="seat-meta">${p.handCount} kart</span>` : cardBacks(p.handCount)}
     </div>`;
   }).join('');
@@ -206,17 +208,19 @@ function renderLobbyActions() {
     <p class="muted">Povleci igralca na drug sedež ali tapni dva igralca za zamenjavo. Nasprotna sedeža sta partnerja.</p>
     <div class="seat-editor-board">
       ${state.players.map((p)=>`<button type="button" class="seat-editor-chip seat-editor-${p.index} ${seatSwapFrom===p.index?'picked':''}" draggable="true" data-seat-chip="${p.index}" data-drop-seat="${p.index}">
-        <small>${seatLabels[p.index]}</small><b>${safe(p.name)}</b><span>${p.index%2===0?'Ekipa A':'Ekipa B'}</span>
+        <small>${seatLabels[p.index]}</small><b>${p.isBot?'🤖 ':''}${safe(p.name)}</b><span>${p.index%2===0?'Ekipa A':'Ekipa B'}</span>
       </button>`).join('')}
       <div class="pair-line pair-a"></div><div class="pair-line pair-b"></div>
       <div class="seat-editor-center">A ↕<br>B ↔</div>
     </div>
     <div class="pair-summary"><span><b>Ekipa A:</b> ${safe(state.players[0]?.name||'—')} + ${safe(state.players[2]?.name||'—')}</span><span><b>Ekipa B:</b> ${safe(state.players[1]?.name||'—')} + ${safe(state.players[3]?.name||'—')}</span></div>
+    <div class="bot-manager">${state.players.length < state.playerCount ? '<button type="button" class="secondary" id="addBotBtn">🤖 Dodaj bota</button>' : ''}${state.players.filter(p=>p.isBot).map(p=>`<button type="button" class="ghost bot-remove" data-remove-bot="${p.index}">Odstrani ${safe(p.name)}</button>`).join('')}</div>
+    <p class="muted bot-note">Bot vedno igra po strogih pravilih, tudi če je soba nastavljena na ohlapna pravila.</p>
   </div>` : '';
   return `<div class="action-box lobby-action"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
     ${full ? '<p class="ready-note">Vsi ste za mizo. Gostitelj naj uredi sedeže in začne deljenje.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}
     ${visualManager}
-    ${me?.isHost ? `<button id="startBtn" class="primary big" ${full?'':'disabled'}>Sedeži so pravilni · začni deljenje</button>` : '<p class="muted">Gostitelj razporedi ekipe in začne deljenje.</p>'}
+    ${me?.isHost ? `<div class="strict-lobby"><span><b>Stroga pravila</b><small>${state.strictRules ? ' Program prepreči napačno karto.' : ' Igralec lahko švingla.'}</small></span><div class="segmented compact-seg"><button type="button" class="seg ${state.strictRules?'active':''}" data-lobby-strict="1">DA</button><button type="button" class="seg ${!state.strictRules?'active':''}" data-lobby-strict="0">NE</button></div></div><button id="startBtn" class="primary big" ${full?'':'disabled'}>Sedeži so pravilni · začni deljenje</button>` : `<p class="muted">Gostitelj razporedi ekipe in začne deljenje.</p><p class="muted">Stroga pravila: <b>${state.strictRules?'DA':'NE'}</b></p>`}
   </div>`;
 }
 
@@ -299,6 +303,9 @@ function renderActions() {
   $('#actionArea').innerHTML = html;
 
   $('#startBtn')?.addEventListener('click', () => socket.emit('startGame'));
+  $('#addBotBtn')?.addEventListener('click', () => socket.emit('addBot'));
+  $$('[data-remove-bot]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); socket.emit('removeBot', { playerIndex:Number(b.dataset.removeBot) }); }));
+  $$('[data-lobby-strict]').forEach((b) => b.addEventListener('click', () => socket.emit('setStrictRules', { enabled: b.dataset.lobbyStrict === '1' })));
   $$('[data-seat-chip]').forEach((el) => {
     el.addEventListener('click', () => {
       const idx = Number(el.dataset.seatChip);
@@ -369,11 +376,12 @@ function render() {
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderActions(); renderHand(); renderLogs();
 }
 
-$$('.seg').forEach((b)=>b.addEventListener('click',()=>{ $$('.seg').forEach((x)=>x.classList.remove('active')); b.classList.add('active'); playerCount=Number(b.dataset.count); }));
+$$('[data-count]').forEach((b)=>b.addEventListener('click',()=>{ $$('[data-count]').forEach((x)=>x.classList.remove('active')); b.classList.add('active'); playerCount=Number(b.dataset.count); }));
+$$('[data-strict]').forEach((b)=>b.addEventListener('click',()=>{ strictRulesChoice=b.dataset.strict==='1'; $$('[data-strict]').forEach((x)=>x.classList.toggle('active',x===b)); }));
 $('#createBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(); if(!name) return homeError.textContent='Vpiši ime.'; homeError.textContent='';
   const tempToken=`p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  socket.emit('createRoom',{name,playerCount,targetScore:Number(targetScoreInput.value),token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
+  socket.emit('createRoom',{name,playerCount,targetScore:Number(targetScoreInput.value),strictRules:strictRulesChoice,token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
 });
 $('#joinBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(), code=roomCodeInput.value.trim().toUpperCase();

@@ -345,3 +345,10 @@ body.focus-active main { padding-top:0; }
   .meld-pair-preview .meld-ghost { transform:translate(14px,-10px) rotate(7deg); }
   .focus-toggle { right:7px; top:calc(7px + env(safe-area-inset-top)); padding:7px 9px; }
 }
+
+.small-help{font-size:.82rem;margin-top:-.3rem}.strict-choice{margin-bottom:.25rem}.strict-lobby{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:10px 0;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}.compact-seg{width:auto;min-width:130px}.compact-seg .seg{padding:.55rem .8rem}
+
+/* --- v7: boti --- */
+.bot-manager { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:10px; }
+.bot-manager button { min-height:38px; }
+.bot-note { text-align:center; font-size:.72rem; margin:8px 0 0; }

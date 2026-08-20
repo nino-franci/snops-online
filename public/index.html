@@ -40,6 +40,14 @@
 
           <label>Ciljni rezultat</label>
           <input id="targetScoreInput" type="number" min="7" max="99" value="25" />
+
+          <label>Stroga pravila</label>
+          <div class="segmented strict-choice" aria-label="Stroga pravila">
+            <button type="button" class="seg active" data-strict="1">DA</button>
+            <button type="button" class="seg" data-strict="0">NE</button>
+          </div>
+          <p class="muted small-help">DA = igra dovoli samo pravilne karte. NE = na svoji potezi lahko odigraš katerokoli karto iz roke.</p>
+
           <button id="createBtn" class="primary big">Ustvari sobo</button>
 
           <div class="divider"><span>ali</span></div>
@@ -105,6 +113,7 @@
             <p><b>Rufanje:</b> rufa se samo barva aduta: srce, kara, križ ali pik. Rufati je dovoljeno katerokoli barvo, tudi če jo igralec že ima.</p>
             <p><b>Licitacija:</b> Dalje ali Višam. Igre: Šnops 6, Mali 7, Veliki 9, Veliki z aduti 12, Igra 18, Igra 24. Če vsi rečejo dalje, se igra navadna igra.</p>
             <p><b>Kontra:</b> šele po koncu licitacije in pred prvo karto. Kontra ×2, kontra nazaj ×3, do konca ×4.</p>
+            <p><b>Stroga pravila:</b> gostitelj izbere DA/NE. Pri DA program zahteva pravilno barvanje/preštihanje/adut; pri NE lahko igralec na svoji potezi odigra katerokoli karto, kot pri fizičnih kartah.</p>
             <p><b>Navadna igra:</b> obvezno barvanje, preštihanje in adut, kadar igralec nima barve. 20/40 lahko napove samo igralec, ki začne štih; izbere Q ali K, druga karta para pa se pokaže prosojno. Napoved šteje ekipi po prvem osvojenem štihu. Zmaga pri 66 se potrdi z gumbom <b>Štejem</b>.</p>
             <p><b>Šnops 6:</b> igralec mora sam pobrati prve največ 3 štihe in zbrati 66+. Barvati je treba, preštihati ni treba. Po osvojenem štihu lahko reče <b>Zaprem</b>; če nima 66, takoj izgubi.</p>
             <p><b>Mali 7:</b> brez adutov, samo barvanje. Igralec mora biti v vseh 5 štihih najnižji v svoji vodeni barvi.</p>

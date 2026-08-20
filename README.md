@@ -69,3 +69,13 @@ Pravila za **3 igralce** bomo definirali posebej. Zato je možnost ustvarjanja n
 - Fokus skrije header, rezultat, dogajanje, klepet in pravila; ostanejo igralna miza, adut, igralec na vrsti, akcije in roka.
 - 20/40 se lahko napove samo ob začetku štihа. Igralec izbere Q ali K kot dejansko odigrano karto; druga karta para se na mizi pokaže prosojno in ostane v roki.
 - Strežnik še vedno strogo preverja dovoljene karte pri barvanju/adutu.
+
+
+## Stroga pravila
+Gostitelj ob ustvarjanju sobe ali v čakalnici izbere **DA/NE**. Pri DA strežnik dovoli samo legalne karte glede na pravila. Pri NE lahko igralec na svoji potezi odigra katerokoli karto iz svoje roke; vrstni red potez in skrite roke ostanejo strežniško nadzorovani.
+
+## Boti (v7)
+
+Pri igri na 4 lahko gostitelj v čakalnici prazne sedeže zapolni z boti. Bote lahko pred začetkom odstrani ali prestavi enako kot druge igralce. Če se pravi igralec pridruži sobi, ki je polna zaradi botov, v čakalnici avtomatsko zamenja prvega bota.
+
+Bot vedno uporablja strogo preverjanje dovoljenih kart, tudi če je soba nastavljena na ohlapna pravila. Bot sam izbere predvig/udarec, rufa aduta, sodeluje v licitaciji, odigra svoje karte, uporablja 20/40 in šteje oziroma zapre, ko izpolni pogoje. Trenutna strategija je namenoma zadržana in jo je mogoče kasneje nadgraditi z več težavnostnimi stopnjami.
