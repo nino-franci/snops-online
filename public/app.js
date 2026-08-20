@@ -57,6 +57,14 @@ function cardAssetName(card) {
   const suitCode = { hearts:'H', diamonds:'D', clubs:'C', spades:'S' }[card.suit];
   return `${card.rank}${suitCode}.png`;
 }
+function preloadCardAssets() {
+  for (const suit of Object.keys(suitSymbol)) {
+    for (const rank of ['J','Q','K','10','A']) {
+      const img = new Image();
+      img.src = `/cards/${cardAssetName({ suit, rank })}`;
+    }
+  }
+}
 function cardHTML(card, { button=false, playable=false, selected=false, ghost=false } = {}) {
   const red = ['hearts','diamonds'].includes(card.suit) ? ' red' : '';
   const classes = `card${red}${playable ? ' playable' : ''}${selected ? ' selected' : ''}${ghost ? ' ghost-card' : ''}`;
@@ -180,22 +188,37 @@ function renderSmallTracks(area) {
   }
   area.innerHTML = `<div class="small-track-layer"><div class="table-center-mark">Mali · ${completed.length + 1}/5</div>${cards.join('')}</div>`;
 }
+function renderTableTip() {
+  if (!state) return '';
+  if (state.trickCollecting && Number.isInteger(state.pendingTrickWinnerIndex)) return `${safe(state.players[state.pendingTrickWinnerIndex]?.name || 'Igralec')} pobira štih ...`;
+  if (state.phase === 'playing' && state.turnIndex === state.me) return 'Tvoja poteza · izberi karto';
+  if (state.phase === 'playing' && Number.isInteger(state.turnIndex)) return `${safe(state.players[state.turnIndex]?.name || 'Igralec')} je na potezi`;
+  if (state.phase === 'cut') return 'Predvig ali udarec';
+  if (state.phase === 'choose_call') return 'Rufanje aduta';
+  if (state.phase === 'auction') return 'Licitacija';
+  if (state.phase === 'contra') return 'Kontra pred prvo karto';
+  return '';
+}
+
 function renderTrick() {
   const area = $('#trickArea');
   if (state.phase === 'playing' && state.contract === 'small') {
     renderSmallTracks(area);
     return;
   }
+  const tip = renderTableTip();
   if (!state.trick.length) {
-    area.innerHTML = `<div class="table-center-mark">${state.phase==='playing'?'Šnops':'Miza'}</div>`;
+    area.innerHTML = `${tip ? `<div class="table-tip">${tip}</div>` : ''}<div class="table-center-mark">${state.phase==='playing'?'Šnops':'Miza'}</div>`;
     return;
   }
   const meld = state.meldDisplay;
-  area.innerHTML = `<div class="trick-cross">${state.trick.map((p) => {
+  const winnerSeat = Number.isInteger(state.pendingTrickWinnerIndex) ? relativeSeat(state.pendingTrickWinnerIndex) : '';
+  const collecting = state.trickCollecting ? ` collecting winner-${winnerSeat}` : '';
+  area.innerHTML = `${tip ? `<div class="table-tip">${tip}</div>` : ''}<div class="trick-cross${collecting}">${state.trick.map((p, i) => {
     const extra = meld && meld.playerIndex === p.playerIndex
       ? `<div class="meld-pair-preview"><div class="meld-main">${cardHTML(p.card)}</div><div class="meld-ghost">${cardHTML(meld.shownCard,{ghost:true})}</div><span class="meld-badge">${meld.points}</span></div>`
       : cardHTML(p.card);
-    return `<div class="played ${relativeSeat(p.playerIndex)}">${extra}</div>`;
+    return `<div class="played ${relativeSeat(p.playerIndex)}" style="--play-order:${i}">${extra}</div>`;
   }).join('')}</div>`;
 }
 
@@ -408,4 +431,5 @@ socket.on('connect',()=>{
 socket.on('disconnect',()=>{ connectionBadge.textContent='brez povezave'; connectionBadge.className='status offline'; });
 window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredInstall=e;$('#installBtn').classList.remove('hidden');});
 $('#installBtn').addEventListener('click',async()=>{if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('#installBtn').classList.add('hidden');});
+preloadCardAssets();
 if('serviceWorker'in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

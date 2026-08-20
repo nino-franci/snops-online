@@ -7,7 +7,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -77,7 +76,7 @@ function createRoom(hostSocket, payload) {
     cutterIndex: null, callerIndex: null, dealMode: null, deck: [], hands: [], pendingSecond: [], talon: [],
     trumpSuit: null, auction: null, contract: null, bidderIndex: null,
     contra: null, multiplier: 1,
-    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [], meldDisplay: null,
+    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, pendingTrickWinnerIndex: null, trickCollecting: false, trickResolveTimer: null, smallHistory: [], meldDisplay: null,
     roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
@@ -104,11 +103,15 @@ function startRound(room) {
   room.bidderIndex = null;
   room.contra = null;
   room.multiplier = 1;
+  if (room.trickResolveTimer) clearTimeout(room.trickResolveTimer);
   room.trick = [];
   room.trickLeader = null;
   room.turnIndex = null;
   room.trickNo = 0;
   room.lastTrickWinner = null;
+  room.pendingTrickWinnerIndex = null;
+  room.trickCollecting = false;
+  room.trickResolveTimer = null;
   room.smallHistory = [];
   room.meldDisplay = null;
   room.roundPoints = Array(room.playerCount).fill(0);
@@ -300,6 +303,10 @@ function teamTricks(room, team) {
 }
 
 function finishRound(room, winnerTeam, loserTeam, baseAmount, reason) {
+  if (room.trickResolveTimer) clearTimeout(room.trickResolveTimer);
+  room.trickResolveTimer = null;
+  room.trickCollecting = false;
+  room.pendingTrickWinnerIndex = null;
   room.meldDisplay = null;
   const amount = baseAmount * room.multiplier;
   room.teamPenalty[loserTeam] += amount;
@@ -394,8 +401,23 @@ function resolveStandardTrick(room) {
 }
 
 function resolveTrick(room) {
+  room.trickResolveTimer = null;
+  room.trickCollecting = false;
+  room.pendingTrickWinnerIndex = null;
   if (room.contract === 'small') return resolveSmallTrick(room);
   return resolveStandardTrick(room);
+}
+
+function completeTrickAfterPause(room) {
+  if (room.trickResolveTimer || room.trick.length !== room.playerCount) return;
+  const winning = currentWinningPlay(room);
+  room.pendingTrickWinnerIndex = winning?.playerIndex ?? null;
+  room.trickCollecting = true;
+  room.turnIndex = null;
+  room.trickResolveTimer = setTimeout(() => {
+    resolveTrick(room);
+    emitRoom(room);
+  }, 1800);
 }
 
 
@@ -463,7 +485,7 @@ function botChooseBid(room, index) {
 }
 
 function botDoAction(room) {
-  if (!room || room.botBusy) return false;
+  if (!room) return false;
   let idx = null;
   if (room.phase === 'cut') idx = room.cutterIndex;
   else if (room.phase === 'choose_call') idx = room.callerIndex;
@@ -546,7 +568,7 @@ function botDoAction(room) {
     const ci = room.hands[idx].findIndex((c)=>c.id===card.id);
     room.hands[idx].splice(ci,1); room.trick.push({playerIndex:idx,card});
     log(room, `${room.players[idx].name} odigra ${card.rank}.`);
-    if (room.trick.length === room.playerCount) resolveTrick(room); else room.turnIndex = nextIndex(room,idx);
+    if (room.trick.length === room.playerCount) completeTrickAfterPause(room); else room.turnIndex = nextIndex(room,idx);
     return true;
   }
   return false;
@@ -593,6 +615,7 @@ function publicState(room, socketId) {
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
     trick: room.trick, smallHistory: room.smallHistory || [], meldDisplay: room.meldDisplay, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
+    trickCollecting: Boolean(room.trickCollecting), pendingTrickWinnerIndex: room.pendingTrickWinnerIndex,
     melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }
@@ -809,7 +832,7 @@ io.on('connection', (socket) => {
     if (!legalCardIds(room, index).includes(cardId)) return emitError(socket, 'Ta karta po pravilih trenutno ni dovoljena.');
     const cardIndex = room.hands[index].findIndex((c) => c.id === cardId); if (cardIndex < 0) return emitError(socket, 'Karte nimaš v roki.');
     const [card] = room.hands[index].splice(cardIndex, 1); room.trick.push({ playerIndex: index, card });
-    if (room.trick.length === room.playerCount) resolveTrick(room); else room.turnIndex = nextIndex(room, index);
+    if (room.trick.length === room.playerCount) completeTrickAfterPause(room); else room.turnIndex = nextIndex(room, index);
     emitRoom(room);
   });
 
@@ -842,4 +865,13 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+}
+
+module.exports = {
+  createRoom,
+  startRound,
+  scheduleBot,
+  completeTrickAfterPause
+};

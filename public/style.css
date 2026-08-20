@@ -38,6 +38,8 @@ button { touch-action: manipulation; }
 .brand { font-weight: 900; letter-spacing: -.03em; font-size: 1.15rem; }
 .subbrand { color: var(--muted); font-size: .78rem; margin-top: 2px; }
 main { padding: 8px 12px 32px; }
+.site-footer { display:flex; justify-content:center; align-items:center; gap:8px; padding:0 12px 18px; color:var(--muted); font-size:.78rem; text-align:center; }
+.site-footer span { white-space:nowrap; }
 .panel {
   background: linear-gradient(180deg, rgba(28,74,53,.96), rgba(18,54,38,.97));
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
@@ -245,6 +247,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .table-center-mark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,.18); font-weight:900; letter-spacing:.16em; text-transform:uppercase; }
 
 .focus-mode .room-strip,.focus-mode .scoreboard,.focus-mode .tabs-panel,.focus-mode .table-head { display:none; }
+.focus-active .site-footer { display:none; }
 .focus-mode main { padding-top:6px; }
 .focus-mode .table { min-height:calc(100dvh - 12px); border-radius:0; margin:0; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:transparent; box-shadow:none; border:none; }
 .focus-mode .game-info { justify-content:center; margin:2px 0 4px; position:sticky; top:4px; z-index:10; }
@@ -352,3 +355,94 @@ body.focus-active main { padding-top:0; }
 .bot-manager { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:10px; }
 .bot-manager button { min-height:38px; }
 .bot-note { text-align:center; font-size:.72rem; margin:8px 0 0; }
+
+/* --- v6: mobile live-table feel, trick pause/collect and quiet tips --- */
+.table {
+  min-height: min(640px, calc(100dvh - 150px));
+}
+.play-zone {
+  min-height: clamp(360px, 58dvh, 620px);
+  border: 1px solid rgba(240,197,109,.12);
+  box-shadow: inset 0 0 90px rgba(0,0,0,.22), inset 0 0 0 16px rgba(255,255,255,.015);
+}
+.play-zone:before {
+  content: "";
+  position: absolute;
+  inset: 9% 10%;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.055);
+  pointer-events: none;
+}
+.table-tip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 8;
+  transform: translate(-50%, -50%);
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(8,25,18,.74);
+  border: 1px solid rgba(255,255,255,.11);
+  color: rgba(247,244,233,.78);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.trick-cross .played {
+  transition: left .45s cubic-bezier(.2,.9,.2,1), top .45s cubic-bezier(.2,.9,.2,1), transform .45s cubic-bezier(.2,.9,.2,1), opacity .35s ease;
+  animation: cardDrop .2s ease-out both;
+  animation-delay: calc(var(--play-order, 0) * 35ms);
+}
+.trick-cross.collecting .played { z-index: 12; opacity: .92; }
+.trick-cross.collecting.winner-seat-bottom .played { left:50%; top:86%; transform:translate(-50%,-50%) scale(.78) rotate(10deg); }
+.trick-cross.collecting.winner-seat-top .played { left:50%; top:14%; transform:translate(-50%,-50%) scale(.78) rotate(-10deg); }
+.trick-cross.collecting.winner-seat-left .played { left:12%; top:50%; transform:translate(-50%,-50%) scale(.78) rotate(-12deg); }
+.trick-cross.collecting.winner-seat-right .played { left:88%; top:50%; transform:translate(-50%,-50%) scale(.78) rotate(12deg); }
+.trick-cross.collecting .played:nth-child(2) { transition-delay: 45ms; }
+.trick-cross.collecting .played:nth-child(3) { transition-delay: 90ms; }
+.trick-cross.collecting .played:nth-child(4) { transition-delay: 135ms; }
+.card-art { transition: opacity .12s ease; }
+.hand-scroll .card, .trick-cross .card { will-change: transform; }
+
+@keyframes cardDrop {
+  from { opacity: 0; transform: translate(-50%,-50%) scale(.9); }
+  to { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
+@media (max-width: 560px) {
+  #app { max-width: 100%; }
+  main { padding: 6px 8px 18px; }
+  .topbar { padding-bottom: 6px; }
+  .table { min-height: calc(100dvh - 120px); padding: 10px; border-radius: 22px; }
+  .table-head h2 { font-size: 1.08rem; }
+  .game-info { margin: 8px 0; }
+  .info-pill { font-size: .71rem; padding: 6px 8px; }
+  .play-zone { min-height: clamp(390px, 60dvh, 560px); margin-top: 4px; }
+  .table-seat.seat-bottom { top: 93%; }
+  .table-seat.seat-top { top: 7%; }
+  .table-seat.seat-left { left: 12%; }
+  .table-seat.seat-right { left: 88%; }
+  .trick-area { inset: 19% 16%; }
+  .trick-cross { min-height: 230px; }
+  .trick-cross .played.seat-bottom { top: 80%; }
+  .trick-cross .played.seat-top { top: 20%; }
+  .trick-cross .played.seat-left { left: 23%; }
+  .trick-cross .played.seat-right { left: 77%; }
+  .trick-cross .played .card { width: min(17vw, 58px); }
+  .table-center-mark { font-size: .76rem; }
+  .table-tip { top: 54%; max-width: 82vw; overflow: hidden; text-overflow: ellipsis; }
+  .hand-scroll { padding-bottom: 8px; }
+  .hand-scroll .card { flex-basis: min(18vw, 72px); width: min(18vw, 72px); }
+}
+
+@media (max-width: 360px) {
+  .table { min-height: calc(100dvh - 96px); padding: 8px; }
+  .play-zone { min-height: 400px; }
+  .table-seat { min-width: 74px; max-width: 96px; }
+  .seat-name { font-size: .7rem; }
+  .trick-area { inset: 20% 14%; }
+  .table-tip { font-size: .68rem; }
+}
