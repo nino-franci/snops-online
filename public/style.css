@@ -38,6 +38,8 @@ button { touch-action: manipulation; }
 .brand { font-weight: 900; letter-spacing: -.03em; font-size: 1.15rem; }
 .subbrand { color: var(--muted); font-size: .78rem; margin-top: 2px; }
 main { padding: 8px 12px 32px; }
+.site-footer { display:flex; justify-content:center; align-items:center; gap:8px; padding:0 12px 18px; color:var(--muted); font-size:.78rem; text-align:center; }
+.site-footer span { white-space:nowrap; }
 .panel {
   background: linear-gradient(180deg, rgba(28,74,53,.96), rgba(18,54,38,.97));
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
@@ -245,6 +247,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .table-center-mark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,.18); font-weight:900; letter-spacing:.16em; text-transform:uppercase; }
 
 .focus-mode .room-strip,.focus-mode .scoreboard,.focus-mode .tabs-panel,.focus-mode .table-head { display:none; }
+.focus-active .site-footer { display:none; }
 .focus-mode main { padding-top:6px; }
 .focus-mode .table { min-height:calc(100dvh - 12px); border-radius:0; margin:0; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:transparent; box-shadow:none; border:none; }
 .focus-mode .game-info { justify-content:center; margin:2px 0 4px; position:sticky; top:4px; z-index:10; }
