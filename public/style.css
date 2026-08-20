@@ -316,3 +316,32 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .focus-mode .hand-scroll { max-width:100%; padding-inline:8px; }
   .focus-mode .hand-scroll .card { flex-basis:min(20vw,72px); width:min(20vw,72px); margin-left:-11px; }
 }
+
+/* --- v5: user-controlled focus + 20/40 table preview --- */
+.focus-toggle {
+  position: fixed; right: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 90;
+  padding: 8px 11px; border-radius: 999px; font-size: .76rem; font-weight: 900;
+  background: rgba(8,25,18,.94); color: var(--gold); border: 1px solid rgba(240,197,109,.45);
+  box-shadow: 0 8px 18px rgba(0,0,0,.28);
+}
+body.focus-active .topbar { display:none; }
+body.focus-active main { padding-top:0; }
+.focus-mode .focus-toggle { display:block; }
+
+.meld-pair-preview { position:relative; width:58px; height:calc(58px * 1.42); }
+.meld-pair-preview .meld-main,
+.meld-pair-preview .meld-ghost { position:absolute; inset:0; }
+.meld-pair-preview .meld-ghost { transform: translate(18px,-12px) rotate(8deg); z-index:-1; }
+.card.ghost-card { opacity:.34; filter:saturate(.65); }
+.meld-badge {
+  position:absolute; right:-22px; bottom:-13px; z-index:8; min-width:28px; height:28px; padding:0 7px;
+  display:grid; place-items:center; border-radius:999px; background:var(--gold); color:#1c261e;
+  border:2px solid #fff4c8; font-weight:950; font-size:.72rem; box-shadow:0 4px 12px rgba(0,0,0,.3);
+}
+.meld-choice { white-space:nowrap; }
+
+@media (max-width:420px) {
+  .meld-pair-preview { width:52px; height:calc(52px * 1.42); }
+  .meld-pair-preview .meld-ghost { transform:translate(14px,-10px) rotate(7deg); }
+  .focus-toggle { right:7px; top:calc(7px + env(safe-area-inset-top)); padding:7px 9px; }
+}

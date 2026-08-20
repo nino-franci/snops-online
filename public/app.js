@@ -20,6 +20,7 @@ let state = null;
 let selectedTalon = new Set();
 let deferredInstall = null;
 let seatSwapFrom = null;
+let focusEnabled = localStorage.getItem('snops-focus') === '1';
 
 nameInput.value = localStorage.getItem('snops-name') || '';
 roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
@@ -55,9 +56,9 @@ function cardAssetName(card) {
   const suitCode = { hearts:'H', diamonds:'D', clubs:'C', spades:'S' }[card.suit];
   return `${card.rank}${suitCode}.png`;
 }
-function cardHTML(card, { button=false, playable=false, selected=false } = {}) {
+function cardHTML(card, { button=false, playable=false, selected=false, ghost=false } = {}) {
   const red = ['hearts','diamonds'].includes(card.suit) ? ' red' : '';
-  const classes = `card${red}${playable ? ' playable' : ''}${selected ? ' selected' : ''}`;
+  const classes = `card${red}${playable ? ' playable' : ''}${selected ? ' selected' : ''}${ghost ? ' ghost-card' : ''}`;
   const attrs = button ? `data-card-id="${safe(card.id)}" ${playable ? '' : 'disabled'}` : '';
   const tag = button ? 'button' : 'div';
   const asset = `/cards/${cardAssetName(card)}`;
@@ -187,7 +188,13 @@ function renderTrick() {
     area.innerHTML = `<div class="table-center-mark">${state.phase==='playing'?'Šnops':'Miza'}</div>`;
     return;
   }
-  area.innerHTML = `<div class="trick-cross">${state.trick.map((p) => `<div class="played ${relativeSeat(p.playerIndex)}">${cardHTML(p.card)}</div>`).join('')}</div>`;
+  const meld = state.meldDisplay;
+  area.innerHTML = `<div class="trick-cross">${state.trick.map((p) => {
+    const extra = meld && meld.playerIndex === p.playerIndex
+      ? `<div class="meld-pair-preview"><div class="meld-main">${cardHTML(p.card)}</div><div class="meld-ghost">${cardHTML(meld.shownCard,{ghost:true})}</div><span class="meld-badge">${meld.points}</span></div>`
+      : cardHTML(p.card);
+    return `<div class="played ${relativeSeat(p.playerIndex)}">${extra}</div>`;
+  }).join('')}</div>`;
 }
 
 function renderLobbyActions() {
@@ -254,10 +261,18 @@ function renderPlayActions() {
   const melds = state.eligibleMelds || [];
   const myTurn = state.me === state.turnIndex;
   const buttons = [];
-  if (melds.length) buttons.push(...melds.map((m) => `<button class="secondary" data-meld="${m.suit}">Napovej ${m.points} (${suitSymbol[m.suit]})</button>`));
+  if (melds.length) {
+    const hand = state.myHand || [];
+    for (const m of melds) {
+      for (const rank of ['Q','K']) {
+        const c = hand.find((x) => x.suit === m.suit && x.rank === rank);
+        if (c) buttons.push(`<button class="secondary meld-choice" data-meld-card="${safe(c.id)}">${m.points}: odigraj ${rank}${suitSymbol[m.suit]}</button>`);
+      }
+    }
+  }
   if (state.canCount) buttons.push('<button class="primary" id="countBtn">Štejem</button>');
   if (state.canClose) buttons.push('<button class="primary" id="closeBtn">Zaprem</button>');
-  return `<div class="action-box"><h3>${myTurn?'Tvoja poteza':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi dovoljeno karto.':'Na potezi je '+safe(state.players[state.turnIndex].name)+'.'}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
+  return `<div class="action-box"><h3>${myTurn?'Tvoja poteza':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi karto. Če začneš štih in imaš Q+K iste barve, lahko spodaj izbereš katero karto odigraš kot 20/40.':'Na potezi je '+safe(state.players[state.turnIndex].name)+'.'}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
 }
 function renderEndActions() {
   const r = state.roundResult;
@@ -311,7 +326,7 @@ function renderActions() {
   $('#skipTalonBtn')?.addEventListener('click', () => socket.emit('exchangeTalon', { cardIds:[] }));
   $$('[data-bid]').forEach((b) => b.addEventListener('click', () => socket.emit('bid', { contract:b.dataset.bid })));
   $$('[data-contra]').forEach((b) => b.addEventListener('click', () => socket.emit('contraAction', { action:b.dataset.contra })));
-  $$('[data-meld]').forEach((b) => b.addEventListener('click', () => socket.emit('declareMeld', { suit:b.dataset.meld })));
+  $$('[data-meld-card]').forEach((b) => b.addEventListener('click', () => socket.emit('playMeld', { cardId:b.dataset.meldCard })));
   $('#countBtn')?.addEventListener('click', () => socket.emit('countPoints'));
   $('#closeBtn')?.addEventListener('click', () => socket.emit('closeSchnops'));
 }
@@ -342,7 +357,13 @@ function renderLogs() {
 function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
-  gameView.classList.toggle('focus-mode', state.phase === 'playing' || (state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4));
+  const focusAvailable = state.playerCount === 4 && state.players.length === 4;
+  const focusOn = focusAvailable && focusEnabled;
+  gameView.classList.toggle('focus-mode', focusOn);
+  document.body.classList.toggle('focus-active', focusOn);
+  const focusToggle = $('#focusToggle');
+  focusToggle.classList.toggle('hidden', !focusAvailable);
+  focusToggle.textContent = focusOn ? 'Izhod iz fokusa' : 'Fokus';
   gameView.classList.toggle('seating-mode', state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4);
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderActions(); renderHand(); renderLogs();
@@ -366,6 +387,7 @@ $('#shareBtn').addEventListener('click',async()=>{
   try { if(navigator.share) await navigator.share({title:'Šnops Online',text,url}); else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Povezava je kopirana.'); } } catch(_){}
 });
 $('#chatForm').addEventListener('submit',(e)=>{ e.preventDefault(); const input=$('#chatInput'), text=input.value.trim(); if(!text)return; socket.emit('chat',{text}); input.value=''; });
+$('#focusToggle').addEventListener('click',()=>{ focusEnabled=!focusEnabled; localStorage.setItem('snops-focus', focusEnabled?'1':'0'); render(); });
 $$('.tab').forEach((b)=>b.addEventListener('click',()=>{ $$('.tab').forEach((x)=>x.classList.toggle('active',x===b)); ['log','chat','rules'].forEach((tab)=>$(`#${tab}Tab`).classList.toggle('hidden',tab!==b.dataset.tab)); }));
 
 socket.on('state',(next)=>{ state=next; if(state.phase!=='talon_exchange') selectedTalon.clear(); render(); });

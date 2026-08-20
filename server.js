@@ -77,7 +77,7 @@ function createRoom(hostSocket, payload) {
     cutterIndex: null, callerIndex: null, dealMode: null, deck: [], hands: [], pendingSecond: [], talon: [],
     trumpSuit: null, auction: null, contract: null, bidderIndex: null,
     contra: null, multiplier: 1,
-    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [],
+    trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [], meldDisplay: null,
     roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
@@ -110,6 +110,7 @@ function startRound(room) {
   room.trickNo = 0;
   room.lastTrickWinner = null;
   room.smallHistory = [];
+  room.meldDisplay = null;
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
   room.captured = Array.from({ length: room.playerCount }, () => []);
@@ -264,7 +265,7 @@ function legalCardIds(room, playerIndex) {
 }
 
 function eligibleMelds(room, playerIndex) {
-  if (room.phase !== 'playing' || room.turnIndex !== playerIndex) return [];
+  if (room.phase !== 'playing' || room.turnIndex !== playerIndex || room.trick.length !== 0) return [];
   if (!['normal', 'schnops'].includes(room.contract)) return [];
   if (room.contract === 'schnops' && playerIndex !== room.bidderIndex) return [];
   const hand = room.hands[playerIndex] || [];
@@ -296,6 +297,7 @@ function teamTricks(room, team) {
 }
 
 function finishRound(room, winnerTeam, loserTeam, baseAmount, reason) {
+  room.meldDisplay = null;
   const amount = baseAmount * room.multiplier;
   room.teamPenalty[loserTeam] += amount;
   room.roundResult = {
@@ -348,6 +350,7 @@ function resolveStandardTrick(room) {
   room.trickCounts[winner] += 1;
   room.captured[winner].push(...room.trick.map((p) => p.card));
   room.lastTrickWinner = winner;
+  room.meldDisplay = null;
   room.trickNo += 1;
   activatePendingMelds(room, teamOf(winner));
   log(room, `${room.players[winner].name} pobere štih (+${points}).`);
@@ -419,7 +422,7 @@ function publicState(room, socketId) {
     me, myTeam, myHand: me >= 0 ? (room.hands[me] || []) : [], legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
-    trick: room.trick, smallHistory: room.smallHistory || [], trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
+    trick: room.trick, smallHistory: room.smallHistory || [], meldDisplay: room.meldDisplay, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
     melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }
@@ -552,14 +555,28 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('declareMeld', ({ suit } = {}) => {
+  socket.on('playMeld', ({ cardId } = {}) => {
     const room = roomForSocket(socket); if (!room) return;
     const { index } = playerBySocket(room, socket.id);
-    const meld = eligibleMelds(room, index).find((m) => m.suit === suit);
-    if (!meld) return emitError(socket, 'Te napovedi trenutno ne moreš narediti.');
-    room.melds.push({ playerIndex: index, suit, points: meld.points, activated: false });
-    log(room, `${room.players[index].name} napove ${meld.points}.`);
-    activatePendingMelds(room, teamOf(index)); emitRoom(room);
+    if (room.phase !== 'playing' || room.turnIndex !== index || room.trick.length !== 0) return emitError(socket, '20/40 lahko napoveš samo, ko začneš štih.');
+    const cardIndex = room.hands[index].findIndex((c) => c.id === cardId);
+    if (cardIndex < 0) return emitError(socket, 'Karte nimaš v roki.');
+    const chosen = room.hands[index][cardIndex];
+    if (!['Q','K'].includes(chosen.rank)) return emitError(socket, 'Za 20/40 moraš odigrati damo ali kralja.');
+    const meld = eligibleMelds(room, index).find((m) => m.suit === chosen.suit);
+    if (!meld) return emitError(socket, 'S to karto trenutno ne moreš napovedati 20/40.');
+    const otherRank = chosen.rank === 'Q' ? 'K' : 'Q';
+    const other = room.hands[index].find((c) => c.suit === chosen.suit && c.rank === otherRank);
+    if (!other) return emitError(socket, 'Za 20/40 moraš imeti kralja in damo iste barve.');
+
+    room.melds.push({ playerIndex: index, suit: chosen.suit, points: meld.points, activated: false });
+    room.meldDisplay = { playerIndex: index, points: meld.points, chosenCard: chosen, shownCard: other };
+    room.hands[index].splice(cardIndex, 1);
+    room.trick.push({ playerIndex: index, card: chosen });
+    log(room, `${room.players[index].name} napove ${meld.points} in odigra ${chosen.rank}.`);
+    activatePendingMelds(room, teamOf(index));
+    room.turnIndex = nextIndex(room, index);
+    emitRoom(room);
   });
 
   socket.on('countPoints', () => {

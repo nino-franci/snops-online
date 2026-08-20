@@ -63,3 +63,9 @@ Pravila za **3 igralce** bomo definirali posebej. Zato je možnost ustvarjanja n
 - Ko so vsi 4 igralci v sobi, se prikaz takoj preklopi na mizo/focus pogled, se preden se zacne deljenje.
 - `public/cards/` je pripravljen za prave PNG slike kart; ce slike ni, ostane CSS nadomestna karta.
 - `PUSH_CHANGES.bat` in `GIT-WORKFLOW.md` omogocata normalen git push brez rocnega nalaganja datotek.
+
+## v5 spremembe
+- Fokus način je izbira vsakega igralca in se shrani na njegovem telefonu.
+- Fokus skrije header, rezultat, dogajanje, klepet in pravila; ostanejo igralna miza, adut, igralec na vrsti, akcije in roka.
+- 20/40 se lahko napove samo ob začetku štihа. Igralec izbere Q ali K kot dejansko odigrano karto; druga karta para se na mizi pokaže prosojno in ostane v roki.
+- Strežnik še vedno strogo preverja dovoljene karte pri barvanju/adutu.
