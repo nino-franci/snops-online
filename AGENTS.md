@@ -554,6 +554,40 @@ Do not proceed until the user explicitly approves.
 
 ---
 
+## Completion summary and approval
+
+When a task is finished, do not commit, push, merge, or open a Pull Request automatically.
+
+First prepare a short executive summary that is suitable to be read aloud to the user.
+
+The summary must clearly state:
+
+- what was changed;
+- which files were changed;
+- what automated tests were run;
+- what real gameplay or UI flows were tested;
+- which tests passed;
+- which tests failed, if any;
+- what could not be tested;
+- any remaining risks, limitations, or uncertainties;
+- whether the change is ready to commit and push.
+
+Keep this summary concise, clear, and non-technical enough to understand by voice.
+
+Then show the relevant git diff or a concise diff summary.
+
+After that, STOP and explicitly ask:
+
+"Spremembe so pripravljene. Ali želiš, da jih commitam in pusham?"
+
+Do not continue until the user gives explicit approval.
+
+If the user approves, commit and push only the current `codex/...` branch.
+
+If there are failed tests, unresolved risks, or uncertainty about the requested behavior, clearly say so and do not recommend pushing until the issue is resolved.
+
+---
+
 ## 22. Commit and push approval
 
 Only after explicit approval:
