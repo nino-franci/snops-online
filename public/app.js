@@ -10,6 +10,7 @@ const targetScoreInput = $('#targetScoreInput');
 const homeError = $('#homeError');
 const toastEl = $('#toast');
 const connectionBadge = $('#connectionBadge');
+const appVersion = $('#appVersion');
 
 const suitSymbol = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' };
 const suitName = { hearts: 'srce', diamonds: 'kara', clubs: 'križ', spades: 'pik' };
@@ -25,6 +26,21 @@ let strictRulesChoice = true;
 
 nameInput.value = localStorage.getItem('snops-name') || '';
 roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
+
+function updateAppMeta(meta) {
+  if (!appVersion || !meta) return;
+  appVersion.textContent = meta.version || '1.0';
+}
+
+async function loadAppMeta() {
+  try {
+    const response = await fetch('/app-meta');
+    if (!response.ok) return;
+    updateAppMeta(await response.json());
+  } catch (_error) {
+    // Verzija ostane privzeta, če podatki strežnika niso dosegljivi.
+  }
+}
 
 function toast(text) {
   toastEl.textContent = text;
@@ -408,4 +424,5 @@ socket.on('connect',()=>{
 socket.on('disconnect',()=>{ connectionBadge.textContent='brez povezave'; connectionBadge.className='status offline'; });
 window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredInstall=e;$('#installBtn').classList.remove('hidden');});
 $('#installBtn').addEventListener('click',async()=>{if(!deferredInstall)return;deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;$('#installBtn').classList.add('hidden');});
+loadAppMeta();
 if('serviceWorker'in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});

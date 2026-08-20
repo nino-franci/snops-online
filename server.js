@@ -1,5 +1,6 @@
 const path = require('path');
 const http = require('http');
+const { execFileSync } = require('child_process');
 const express = require('express');
 const { Server } = require('socket.io');
 
@@ -7,9 +8,26 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 const PORT = process.env.PORT || 3000;
+const COMMIT_COUNT = getCommitCount();
+const APP_VERSION = `1.${COMMIT_COUNT}`;
+
+function getCommitCount() {
+  const override = Number(process.env.COMMIT_COUNT);
+  if (Number.isInteger(override) && override >= 0) return override;
+  try {
+    return Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], {
+      cwd: __dirname,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()) || 0;
+  } catch (_error) {
+    return 0;
+  }
+}
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/app-meta', (_req, res) => res.json({ author: 'Nino Franci', version: APP_VERSION, commitCount: COMMIT_COUNT }));
 
 const rooms = new Map();
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -463,7 +481,7 @@ function botChooseBid(room, index) {
 }
 
 function botDoAction(room) {
-  if (!room || room.botBusy) return false;
+  if (!room) return false;
   let idx = null;
   if (room.phase === 'cut') idx = room.cutterIndex;
   else if (room.phase === 'choose_call') idx = room.callerIndex;
@@ -842,4 +860,12 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Šnops Online teče na http://localhost:${PORT}`));
+}
+
+module.exports = {
+  createRoom,
+  startRound,
+  scheduleBot
+};
