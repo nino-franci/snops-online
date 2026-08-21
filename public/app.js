@@ -15,12 +15,11 @@ const suitSymbol = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠'
 const suitName = { hearts: 'srce', diamonds: 'kara', clubs: 'križ', spades: 'pik' };
 const suitLetter = { hearts: 'S', diamonds: 'K', clubs: 'K', spades: 'P' };
 
-let playerCount = 4;
+const playerCount = 4;
 let state = null;
 let selectedTalon = new Set();
 let deferredInstall = null;
 let seatSwapFrom = null;
-let strictRulesChoice = true;
 let trickAnimationTimer = null;
 let previousTeamPenalties = null;
 let lastRoundDialogKey = null;
@@ -451,12 +450,10 @@ function render() {
   renderRoundDialog();
 }
 
-$$('[data-count]').forEach((b)=>b.addEventListener('click',()=>{ $$('[data-count]').forEach((x)=>x.classList.remove('active')); b.classList.add('active'); playerCount=Number(b.dataset.count); }));
-$$('[data-strict]').forEach((b)=>b.addEventListener('click',()=>{ strictRulesChoice=b.dataset.strict==='1'; $$('[data-strict]').forEach((x)=>x.classList.toggle('active',x===b)); }));
 $('#createBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(); if(!name) return homeError.textContent='Vpiši ime.'; homeError.textContent='';
   const tempToken=`p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  socket.emit('createRoom',{name,playerCount,targetScore:Number(targetScoreInput.value),strictRules:strictRulesChoice,token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
+  socket.emit('createRoom',{name,playerCount,targetScore:Number(targetScoreInput.value),strictRules:true,token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
 });
 $('#joinBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(), code=roomCodeInput.value.trim().toUpperCase();
