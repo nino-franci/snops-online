@@ -24,6 +24,11 @@ const savedFocusPreference = localStorage.getItem('snops-focus');
 let focusEnabled = savedFocusPreference === null ? true : savedFocusPreference === '1';
 let strictRulesChoice = true;
 let trickAnimationTimer = null;
+let previousTeamPenalties = null;
+let lastRoundDialogKey = null;
+let chatOpen = false;
+let unreadChatCount = 0;
+let previousChatCount = 0;
 
 const cardAssetUrls = ['J','Q','K','10','A'].flatMap((rank) =>
   ['C','D','H','S'].map((suit) => `/cards/${rank}${suit}.png`)
@@ -102,15 +107,18 @@ function renderScoreboard() {
   if (state.playerCount === 4 && state.teams) {
     $('#scoreboard').innerHTML = state.teams.map((t) => {
       const names = t.members.map((i) => state.players[i]?.name).filter(Boolean).join(' + ');
+      const oldScore = previousTeamPenalties?.[t.index];
+      const gain = Number.isFinite(oldScore) && t.penalty > oldScore ? t.penalty - oldScore : 0;
       return `<div class="score-card team-card ${state.myTeam === t.index ? 'me' : ''}">
         <div class="score-name"><b>Ekipa ${t.index + 1}</b></div>
         <div class="team-names">${safe(names)}</div>
-        <div class="score-main"><strong>${t.penalty}</strong><span class="score-small">/ ${state.targetScore}</span></div>
-        <div class="score-small">v rundi: ${t.roundPoints} · štihi: ${t.tricks}</div>
-        ${isHost ? `<div class="score-tools"><button data-team-score="${t.index}" data-delta="-1">−</button><button data-team-score="${t.index}" data-delta="1">+</button></div>` : ''}
+        <div class="score-main"><strong class="${gain ? 'score-gained' : ''}">${gain ? `<span>${oldScore}</span><em>+${gain}</em><span>→ ${t.penalty}</span>` : t.penalty}</strong><span class="score-small">/ ${state.targetScore}</span></div>
       </div>`;
     }).join('');
+    $('#hostScoreTools').classList.toggle('hidden', !isHost);
+    $('#scoreTools').innerHTML = isHost ? state.teams.map((t) => `<div class="score-adjust-row"><span>Ekipa ${t.index + 1}: <b>${t.penalty}</b></span><span><button data-team-score="${t.index}" data-delta="-1">−</button><button data-team-score="${t.index}" data-delta="1">+</button></span></div>`).join('') : '';
     $$('[data-team-score]').forEach((b) => b.addEventListener('click', () => socket.emit('adjustScore', { team:Number(b.dataset.teamScore), delta:Number(b.dataset.delta) })));
+    previousTeamPenalties = state.teams.map((t) => t.penalty);
     return;
   }
   $('#scoreboard').innerHTML = state.players.map((p) => `<div class="score-card ${p.index===state.me?'me':''}"><b>${safe(p.name)}</b><div class="score-small">${p.roundPoints} t. · ${p.tricks} štihov</div></div>`).join('');
@@ -159,7 +167,7 @@ function cardBacks(count) {
   return `<div class="back-fan" aria-label="${count} skritih kart">${Array.from({length:visible},()=>'<span class="mini-back"></span>').join('')}</div>`;
 }
 function renderPlayersAround() {
-  $('#playersAround').innerHTML = state.players.map((p) => {
+  const players = state.players.map((p) => {
     const mine = p.index === state.me;
     const partner = state.playerCount===4 && ((p.index-state.me+4)%4===2);
     const turn = state.turnIndex===p.index;
@@ -168,6 +176,11 @@ function renderPlayersAround() {
       ${mine ? `<span class="seat-meta">${p.handCount} kart</span>` : cardBacks(p.handCount)}
     </div>`;
   }).join('');
+  const pileOwner = state.myTeamPileOwner;
+  const pile = Number.isInteger(pileOwner) && state.myTeamCapturedCount > 0
+    ? `<div class="captured-pile ${relativeSeat(pileOwner)}"><div class="pile-cards" aria-hidden="true"><i></i><i></i><i></i></div><div><b>${state.myTeamCapturedCount} kart</b><span>${state.myTeamRoundPoints} točk</span></div></div>`
+    : '';
+  $('#playersAround').innerHTML = players + pile;
 }
 
 function smallTrackPosition(seatClass, step) {
@@ -328,7 +341,20 @@ function renderPlayActions() {
   const waitingText = state.trickCollectAt
     ? 'Končan štih bo čez trenutek pobran z mize.'
     : `Na potezi je ${safe(state.players[state.turnIndex]?.name || 'naslednji igralec')}.`;
-  return `<div class="action-box"><h3>${myTurn?'Tvoja poteza':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi karto. Če začneš štih in imaš Q+K iste barve, lahko spodaj izbereš katero karto odigraš kot 20/40.':waitingText}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
+  return `<div class="action-box"><h3>${myTurn?'Ti si na vrsti':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi karto.':waitingText}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
+}
+
+function renderRoundDialog() {
+  const r = state.roundResult;
+  if (!r || !['round_end','match_end'].includes(state.phase)) return;
+  const key = `${state.roundNo}:${r.winnerTeam}:${r.amount}:${r.reason}`;
+  if (lastRoundDialogKey === key) return;
+  lastRoundDialogKey = key;
+  const winnerNames = r.winners.map((i) => state.players[i]?.name).filter(Boolean).join(' in ');
+  $('#roundResultTitle').textContent = `Zmagala je ekipa ${r.winnerTeam + 1}`;
+  const multiplierText = r.multiplier > 1 ? `<p class="muted">Vrednost: ${r.baseAmount} × ${r.multiplier} = ${r.amount}.</p>` : '';
+  $('#roundResultBody').innerHTML = `<p><b>${safe(winnerNames)}</b></p><p>${safe(r.reason)}</p>${multiplierText}<div class="result-score">Ekipa ${r.loserTeam + 1}: <span>${state.teams[r.loserTeam].penalty - r.amount}</span><em>+${r.amount}</em><strong>→ ${state.teams[r.loserTeam].penalty}</strong></div>`;
+  $('#roundDialog').classList.remove('hidden');
 }
 function renderEndActions() {
   const r = state.roundResult;
@@ -416,6 +442,8 @@ function renderLogs() {
 function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
+  gameView.classList.toggle('lobby-view', state.phase === 'lobby');
+  gameView.classList.toggle('active-game-view', state.phase !== 'lobby');
   // Focus mode is for card play, not for the lobby and setup controls.
   const focusAvailable = state.playerCount === 4 && state.players.length === 4 && state.phase === 'playing';
   const focusOn = focusAvailable && focusEnabled;
@@ -427,6 +455,7 @@ function render() {
   gameView.classList.toggle('seating-mode', state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4);
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderTip(); renderActions(); renderHand(); renderLogs(); scheduleTrickAnimation();
+  renderRoundDialog();
 }
 
 $$('[data-count]').forEach((b)=>b.addEventListener('click',()=>{ $$('[data-count]').forEach((x)=>x.classList.remove('active')); b.classList.add('active'); playerCount=Number(b.dataset.count); }));
@@ -449,9 +478,30 @@ $('#shareBtn').addEventListener('click',async()=>{
 });
 $('#chatForm').addEventListener('submit',(e)=>{ e.preventDefault(); const input=$('#chatInput'), text=input.value.trim(); if(!text)return; socket.emit('chat',{text}); input.value=''; });
 $('#focusToggle').addEventListener('click',()=>{ focusEnabled=!focusEnabled; localStorage.setItem('snops-focus', focusEnabled?'1':'0'); render(); });
-$$('.tab').forEach((b)=>b.addEventListener('click',()=>{ $$('.tab').forEach((x)=>x.classList.toggle('active',x===b)); ['log','chat','rules'].forEach((tab)=>$(`#${tab}Tab`).classList.toggle('hidden',tab!==b.dataset.tab)); }));
+$('#menuToggle').addEventListener('click',()=>$('#gameDrawer').classList.remove('hidden'));
+$('#menuClose').addEventListener('click',()=>$('#gameDrawer').classList.add('hidden'));
+$('#chatToggle').addEventListener('click',()=>{
+  chatOpen = true; unreadChatCount = 0; $('#chatUnread').classList.add('hidden');
+  $('#chatPanel').classList.remove('hidden'); $('#chatInput').focus();
+});
+$('#chatClose').addEventListener('click',()=>{ chatOpen = false; $('#chatPanel').classList.add('hidden'); });
+$('#leaveRoomBtn').addEventListener('click',()=>$('#leaveDialog').classList.remove('hidden'));
+$('#leaveCancel').addEventListener('click',()=>$('#leaveDialog').classList.add('hidden'));
+$('#leaveConfirm').addEventListener('click',()=>{
+  if (state?.code) localStorage.removeItem(`snops-token-${state.code}`);
+  history.replaceState(null, '', location.pathname); location.reload();
+});
+$('#roundDialogClose').addEventListener('click',()=>$('#roundDialog').classList.add('hidden'));
 
-socket.on('state',(next)=>{ state=next; if(state.phase!=='talon_exchange') selectedTalon.clear(); render(); });
+socket.on('state',(next)=>{
+  if (!chatOpen && next.chat.length > previousChatCount) {
+    unreadChatCount += next.chat.length - previousChatCount;
+    $('#chatUnread').textContent = unreadChatCount > 9 ? '9+' : unreadChatCount;
+    $('#chatUnread').classList.toggle('hidden', unreadChatCount === 0);
+  }
+  previousChatCount = next.chat.length;
+  state=next; if(state.phase!=='talon_exchange') selectedTalon.clear(); render();
+});
 socket.on('gameError',(message)=>toast(message));
 socket.on('connect',()=>{
   connectionBadge.textContent='online'; connectionBadge.className='status online';
