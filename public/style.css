@@ -501,3 +501,62 @@ body.focus-active,#gameView.focus-mode { background:#09100e; }
 @media (max-width:719px) { #gameView .table{border-radius:18px;padding:10px}#gameView .play-zone{border-width:4px} }
 @media (max-width:360px) { main{padding-inline:8px}.topbar{padding-inline:12px}.hero-card{padding-inline:20px}.form-card{padding:16px}.room-strip{gap:7px} }
 @media (prefers-reduced-motion:reduce) { #homeView:not(.hidden),#gameView:not(.hidden),.table-seat.turn{animation:none} }
+
+/* --- Full-viewport gameplay: the table, actions and hand never require page scrolling. --- */
+body.focus-active {
+  width:100%; height:100dvh; min-height:100dvh; overflow:hidden;
+  overscroll-behavior:none;
+}
+body.focus-active #app,
+body.focus-active main,
+#gameView.focus-mode {
+  width:100%; height:100dvh; min-height:0; max-width:none;
+}
+body.focus-active #app { padding:0; }
+body.focus-active main { padding:0; }
+#gameView.focus-mode { overflow:hidden; }
+#gameView.focus-mode .table {
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto auto auto;
+  gap:4px;
+  width:100%; height:100dvh; min-height:0;
+  padding:max(7px,env(safe-area-inset-top)) 8px max(7px,env(safe-area-inset-bottom));
+  overflow:hidden;
+}
+#gameView.focus-mode .game-info {
+  position:static; min-height:0; margin:0; padding-right:58px;
+  justify-content:flex-start; overflow:hidden; flex-wrap:nowrap;
+}
+#gameView.focus-mode .game-info .info-pill {
+  flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding:5px 8px; font-size:.68rem;
+}
+#gameView.focus-mode .play-zone {
+  width:min(100%,760px); height:auto; min-height:0; max-height:none;
+  margin:0 auto; align-self:stretch;
+}
+#gameView.focus-mode .game-tip { margin:0 auto; padding:4px 9px; font-size:.64rem; }
+#gameView.focus-mode .action-area { margin:0; }
+#gameView.focus-mode .action-box { padding:6px 9px; }
+#gameView.focus-mode .action-box p { margin:0; line-height:1.25; }
+#gameView.focus-mode .action-buttons { justify-content:center; }
+#gameView.focus-mode .action-buttons button { min-height:38px; padding:7px 10px; }
+#gameView.focus-mode .hand-area { min-height:0; margin:0; }
+#gameView.focus-mode .hand-scroll {
+  min-height:0; max-height:clamp(82px,18dvh,126px);
+  padding:3px 4px 1px; align-items:flex-end;
+}
+#gameView.focus-mode .hand-scroll .card {
+  flex-basis:clamp(54px,18vw,78px); width:clamp(54px,18vw,78px);
+  max-height:clamp(78px,18dvh,113px); margin-left:clamp(-16px,-3vw,-9px);
+}
+#gameView.focus-mode .focus-toggle {
+  top:max(6px,env(safe-area-inset-top)); right:6px;
+  padding:5px 8px; font-size:.66rem; opacity:.82;
+}
+@media (max-height:650px) {
+  #gameView.focus-mode .game-tip { display:none; }
+  #gameView.focus-mode .play-zone { border-width:3px; }
+  #gameView.focus-mode .table-seat { padding:4px 6px; }
+  #gameView.focus-mode .back-fan { margin-top:1px; }
+}
