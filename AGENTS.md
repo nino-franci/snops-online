@@ -52,23 +52,29 @@ For every task:
 2. Start from the latest `origin/main`.
 3. Create a new branch:
    `codex/<short-task-name>`
-4. Implement and test the requested changes.
-5. If all required tests pass:
-   - commit the intended changes;
+4. Implement and test the requested changes on that branch.
+5. Review the diff and prepare the mandatory completion report.
+6. Ask the user for explicit approval before committing or publishing anything.
+7. After the user approves publishing, complete the full publish workflow without asking again:
+   - commit the intended changes on the `codex/...` branch;
    - push the `codex/...` branch to `origin`;
    - update local `main` from the latest `origin/main`;
    - merge the `codex/...` branch into `main`;
    - push `main` to `origin`.
 
-Do not open Pull Requests unless explicitly requested.
+The approval is a single approval for the whole publish workflow. Once the user has clearly said to commit/push/merge, do not ask again between commit, branch push, merge, or `main` push.
+
+Do not open a Pull Request unless the user explicitly requests one. The default workflow is direct branch push followed by merge into `main`.
 
 Do not:
+- commit before user approval;
+- push before user approval;
 - force-push `main`;
 - rewrite published history;
 - merge if required tests are failing;
 - guess during merge conflicts.
 
-A successfully completed and tested task should end with the changes pushed to `origin/main`.
+A successfully completed, tested, and approved task should end with the changes pushed to `origin/main`.
 
 ---
 
@@ -540,103 +546,108 @@ List anything not tested or any remaining uncertainty.
 ### Diff
 Show the git diff or a concise but complete diff summary.
 
-Then STOP.
+Then STOP and ask exactly one approval question, for example:
 
-Ask:
+`Spremembe so pripravljene. Ali želiš, da jih commitam na nov branch, pusham in nato mergam v main?`
 
-`Ali želiš, da commitam in pusham ta branch?`
-
-Do not proceed until the user explicitly approves.
+Do not commit, push, or merge until the user explicitly approves.
 
 ---
 
-## Completion summary and approval
+## 22. Publish approval and automatic completion
 
-When a task is finished, do not commit, push, merge, or open a Pull Request automatically.
+The user must explicitly approve publishing before any commit, push, or merge.
 
-First prepare a short executive summary that is suitable to be read aloud to the user.
+Approval can be any clear instruction with the same intent, for example:
 
-The summary must clearly state:
+- `commitaj`;
+- `commitaj in pushaj`;
+- `commitaj na nov branch`;
+- `naredi commit, push in merge`;
+- `daj na nov branch in mergaj na main`;
+- `ja, naredi`;
+- another clearly equivalent instruction given in response to the approval question.
 
-- what was changed;
-- which files were changed;
-- what automated tests were run;
-- what real gameplay or UI flows were tested;
-- which tests passed;
-- which tests failed, if any;
-- what could not be tested;
-- any remaining risks, limitations, or uncertainties;
-- whether the change is ready to commit and push.
+When the user gives this approval, treat it as approval for the **entire publish workflow** unless the user explicitly limits the scope.
 
-Keep this summary concise, clear, and non-technical enough to understand by voice.
+After approval, do not stop and do not ask for any additional confirmation. Complete all of the following steps in one workflow:
 
-Then show the relevant git diff or a concise diff summary.
+1. Verify the current work is on a `codex/...` branch and not on `main`.
+2. Verify the relevant tests are still passing.
+3. Review the diff and ensure only intended files are included.
+4. Commit the intended changes on the `codex/...` branch.
+5. Use a concise English commit message.
+6. Push the `codex/...` branch to `origin`.
+7. Verify the branch push succeeded.
+8. Fetch the latest remote state again.
+9. Update local `main` from the latest `origin/main`.
+10. Merge the `codex/...` branch into `main`.
+11. Push `main` to `origin`.
+12. Verify that `origin/main` contains the merged change.
+13. Report the final result to the user.
 
-After that, STOP and explicitly ask:
+The final report must include:
 
-"Spremembe so pripravljene. Ali želiš, da jih commitam in pusham?"
+- branch name;
+- commit SHA;
+- commit message;
+- branch push result;
+- merge result;
+- `main` push result;
+- any relevant test/CI status.
 
-Do not continue until the user gives explicit approval.
+Do not ask questions such as:
 
-If the user approves, commit and push only the current `codex/...` branch.
+- `Ali želiš, da zdaj pusham?`;
+- `Ali želiš, da mergam?`;
+- `Ali želiš, da pusham main?`;
+- `Ali želiš, da odprem PR?`.
 
-If there are failed tests, unresolved risks, or uncertainty about the requested behavior, clearly say so and do not recommend pushing until the issue is resolved.
+Once publishing was approved, continue through commit, push, merge, and `main` push automatically.
 
----
-
-## 22. Commit and push approval
-
-Only after explicit approval:
-
-1. verify you are not on `main`;
-2. verify tests are still passing;
-3. commit on the current `codex/...` branch;
-4. use a concise English commit message;
-5. push only the current branch;
-6. report:
-   - branch name;
-   - commit SHA;
-   - commit message;
-   - push result.
-
-Then STOP.
-
-Do not open or merge a PR unless requested.
+If the user explicitly says they want only a commit or only a branch push, follow that narrower instruction instead.
 
 ---
 
 ## 23. Pull request policy
 
-If the user asks to open a Pull Request:
+Do not create a Pull Request as part of the normal workflow.
 
-1. open a PR from the current `codex/...` branch to `main`;
-2. provide a professional PR description containing:
-   - summary;
-   - implementation details;
-   - tests;
-   - security considerations;
-   - known limitations.
+The normal workflow is:
 
-Do not merge automatically.
+`implement -> test -> report -> ask once -> commit on new branch -> push branch -> merge into main -> push main -> final report`
 
-After opening the PR, ask:
+Only create a Pull Request if the user explicitly asks for a Pull Request.
 
-`Ali želiš, da mergam PR v main?`
+If the user explicitly requests a Pull Request, follow that request instead of the normal direct-merge workflow.
+
+Never create a PR merely because it seems safer, more standard, or more convenient.
 
 ---
 
-## 24. Merge policy
+## 24. Merge safety policy
 
-Never merge without explicit approval.
+After the user has approved the full publish workflow, merge automatically only if it is safe to do so.
 
 Before merging:
 
-1. verify CI/test status;
-2. verify the PR is targeting `main`;
-3. verify there are no unresolved critical issues;
-4. report the final status.
+1. verify required tests are passing;
+2. verify the branch was pushed successfully;
+3. fetch the latest `origin/main`;
+4. verify there are no unresolved critical issues;
+5. verify the merge does not require guessing how to resolve conflicts.
 
-Only merge if the user explicitly says to do so.
+If the merge is clean, complete the merge and push `main` without asking again.
+
+If there is a merge conflict, failed required test, rejected push, or another blocking problem:
+
+- stop the publish workflow safely;
+- do not guess;
+- do not force-push;
+- clearly report the blocker to the user;
+- ask only for information or approval that is actually needed to resolve that blocker.
+
+Never force-push `main`.
 
 ---
 
