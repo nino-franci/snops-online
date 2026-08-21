@@ -230,8 +230,21 @@ function scheduleTrickAnimation() {
   clearTimeout(trickAnimationTimer);
   trickAnimationTimer = null;
   if (!state?.trickCollectAt) return;
-  const delay = state.trickCollectAt - Date.now();
-  if (delay > 0) trickAnimationTimer = setTimeout(() => { renderTrick(); renderTip(); }, delay);
+  const startCollection = () => {
+    if (!state?.trickCollectAt || Date.now() < state.trickCollectAt) {
+      scheduleTrickAnimation();
+      return;
+    }
+    const cross = $('#trickArea .trick-cross');
+    if (!cross || !Number.isInteger(state.trickWinner)) return;
+    // Paint the cards first so the browser has a stable animation start frame.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      cross.classList.add('collecting', `collect-${relativeSeat(state.trickWinner)}`);
+      renderTip();
+    }));
+  };
+  const delay = Math.max(0, state.trickCollectAt - Date.now());
+  trickAnimationTimer = setTimeout(startCollection, delay + 8);
 }
 
 function renderLobbyActions() {
@@ -311,7 +324,10 @@ function renderPlayActions() {
   }
   if (state.canCount) buttons.push('<button class="primary" id="countBtn">Štejem</button>');
   if (state.canClose) buttons.push('<button class="primary" id="closeBtn">Zaprem</button>');
-  return `<div class="action-box"><h3>${myTurn?'Tvoja poteza':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi karto. Če začneš štih in imaš Q+K iste barve, lahko spodaj izbereš katero karto odigraš kot 20/40.':'Na potezi je '+safe(state.players[state.turnIndex].name)+'.'}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
+  const waitingText = state.trickCollectAt
+    ? 'Končan štih bo čez trenutek pobran z mize.'
+    : `Na potezi je ${safe(state.players[state.turnIndex]?.name || 'naslednji igralec')}.`;
+  return `<div class="action-box"><h3>${myTurn?'Tvoja poteza':'Igra poteka'}</h3><p class="muted">${myTurn?'Izberi karto. Če začneš štih in imaš Q+K iste barve, lahko spodaj izbereš katero karto odigraš kot 20/40.':waitingText}</p>${buttons.length?`<div class="action-buttons">${buttons.join('')}</div>`:''}</div>`;
 }
 function renderEndActions() {
   const r = state.roundResult;
