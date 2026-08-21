@@ -22,39 +22,30 @@
     <main>
       <section id="homeView" class="panel home-grid">
         <div class="hero-card">
-          <h1>Igrajte skupaj, vsak na svojem telefonu.</h1>
-          <p>Ustvarite sobo, pošljite 5-mestno kodo družini in igrajte v živo. Karte drugih igralcev ostanejo skrite.</p>
-          <div class="feature-row">
-            <span>Za telefon</span><span>Igra v živo</span><span>Do 25 točk</span>
-          </div>
+          <span class="hero-eyebrow">Šnops za štiri</span>
+          <h1>Karte na mizo.<br />Telefoni v roke.</h1>
+          <p>Ustvari sobo, povabi tri igralce in odigraj partijo v živo — vsak s svojimi skritimi kartami.</p>
+          <div class="hero-cards" aria-hidden="true"><span>A♥</span><span>10♠</span><span>K♣</span></div>
         </div>
 
         <div class="form-card">
-          <label>Ime</label>
+          <div class="form-heading"><span class="eyebrow">Hitra igra</span><h2>Začni v nekaj sekundah</h2></div>
+          <label for="nameInput">Tvoje ime</label>
           <input id="nameInput" maxlength="20" autocomplete="nickname" placeholder="npr. Mami" />
-
-          <div class="segmented" aria-label="Število igralcev">
-            <button class="seg active" data-count="4">4 igralci</button>
-            <button class="seg" data-count="3" disabled title="Pravila za 3 igralce uredimo posebej">3 igralci (kmalu)</button>
-          </div>
-
-          <label>Ciljni rezultat</label>
-          <input id="targetScoreInput" type="number" min="7" max="99" value="25" />
-
-          <label>Stroga pravila</label>
-          <div class="segmented strict-choice" aria-label="Stroga pravila">
-            <button type="button" class="seg active" data-strict="1">DA</button>
-            <button type="button" class="seg" data-strict="0">NE</button>
-          </div>
-          <p class="muted small-help">DA = igra dovoli samo pravilne karte. NE = na svoji potezi lahko odigraš katerokoli karto iz roke.</p>
-
-          <button id="createBtn" class="primary big">Ustvari sobo</button>
-
-          <div class="divider"><span>ali</span></div>
-          <label>Koda sobe</label>
-          <div class="join-row">
-            <input id="roomCodeInput" maxlength="5" autocapitalize="characters" placeholder="ABCDE" />
-            <button id="joinBtn" class="secondary">Pridruži se</button>
+          <div class="landing-actions">
+            <section class="landing-action">
+              <div><h3>Nova soba</h3><p>Nastavitve igre urediš v čakalnici.</p></div>
+              <label for="targetScoreInput">Igra do koliko točk?</label>
+              <div class="score-input"><input id="targetScoreInput" type="number" min="7" max="99" value="25" /><span>točk</span></div>
+              <button id="createBtn" class="primary big">Ustvari sobo</button>
+            </section>
+            <div class="divider"><span>ali</span></div>
+            <section class="landing-action">
+              <div><h3>Pridruži se</h3><p>Vnesi kodo, ki ti jo je poslal gostitelj.</p></div>
+              <label for="roomCodeInput">Koda sobe</label>
+              <input id="roomCodeInput" maxlength="5" autocapitalize="characters" placeholder="ABCDE" />
+              <button id="joinBtn" class="secondary big">Vstopi v sobo</button>
+            </section>
           </div>
           <p id="homeError" class="error"></p>
         </div>
