@@ -13,8 +13,7 @@
   <div id="app">
     <header class="topbar">
       <div>
-        <div class="brand"><span class="brand-mark" aria-hidden="true">Š</span>Šnops Online</div>
-        <div class="subbrand">družinska online igra za 4 telefone</div>
+        <div class="brand"><span class="brand-mark" aria-hidden="true">Š</span>Šnops</div>
       </div>
       <button id="installBtn" class="ghost hidden">Namesti</button>
     </header>
@@ -22,10 +21,10 @@
     <main>
       <section id="homeView" class="panel home-grid">
         <div class="hero-card">
-          <span class="hero-eyebrow">Šnops za štiri</span>
-          <h1>Karte na mizo.<br />Telefoni v roke.</h1>
-          <p>Ustvari sobo, povabi tri igralce in odigraj partijo v živo — vsak s svojimi skritimi kartami.</p>
-          <div class="hero-cards" aria-hidden="true"><span>A♥</span><span>10♠</span><span>K♣</span></div>
+          <span class="hero-eyebrow">Šnops</span>
+          <h1>Nimate kart?<br />Ni problema.</h1>
+          <p>Ustvari sobo, povabi prijatelje in odigraj partijo v živo.</p>
+          <div class="hero-cards" aria-hidden="true"><img src="/cards/AH.png" alt="" /><img src="/cards/10S.png" alt="" /><img src="/cards/KC.png" alt="" /></div>
         </div>
 
         <div class="form-card">
@@ -35,10 +34,10 @@
           <div class="landing-actions">
             <section class="landing-action">
               <div><h3>Nova soba</h3><p>Nastavitve igre urediš v čakalnici.</p></div>
-              <label for="targetScoreInput">Igra do koliko točk?</label>
-              <div class="score-input"><input id="targetScoreInput" type="number" min="7" max="99" value="25" /><span>točk</span></div>
+              <div class="segmented room-visibility" aria-label="Vidnost nove sobe"><button type="button" class="seg active" data-room-public="0">Zasebna</button><button type="button" class="seg" data-room-public="1">Javna</button></div>
               <button id="createBtn" class="primary big">Ustvari sobo</button>
             </section>
+            <section class="room-browser" aria-live="polite"><div class="room-browser-head"><h3>Odprte sobe</h3><button id="refreshRoomsBtn" type="button" class="ghost">Osveži</button></div><div id="publicRoomList" class="public-room-list"><p class="muted">Iščem odprte sobe …</p></div></section>
             <div class="divider"><span>ali</span></div>
             <section class="landing-action">
               <div><h3>Pridruži se</h3><p>Vnesi kodo, ki ti jo je poslal gostitelj.</p></div>
@@ -56,7 +55,8 @@
           <section class="scoreboard panel" id="scoreboard"></section>
           <nav class="game-tools" aria-label="Igralne možnosti">
             <button id="chatToggle" class="tool-button" type="button" aria-label="Odpri klepet">💬<span id="chatUnread" class="tool-badge hidden">0</span></button>
-            <button id="menuToggle" class="tool-button" type="button" aria-label="Odpri meni">☰</button>
+            <button id="rulesToggle" class="tool-button" type="button" aria-label="Odpri pravila">?</button>
+            <button id="leaveRoomBtn" class="tool-button leave-tool" type="button" aria-label="Zapusti sobo">↪</button>
           </nav>
         </header>
         <div class="room-strip panel compact">
@@ -88,10 +88,9 @@
           <div id="handArea" class="hand-area"></div>
         </section>
 
-        <aside id="gameDrawer" class="game-drawer hidden" aria-label="Igralni meni">
-          <div class="drawer-head"><h2>Meni</h2><button id="menuClose" class="ghost" type="button">Zapri</button></div>
-          <details><summary>Dogajanje</summary><div id="logTab" class="tab-body"></div></details>
-          <details><summary>Pravila</summary><div id="rulesTab" class="tab-body rules-copy">
+        <aside id="rulesPanel" class="rules-panel hidden" aria-label="Pravila">
+          <div class="chat-head"><button id="rulesClose" class="ghost" type="button">← Nazaj</button><h2>Pravila</h2></div>
+          <div id="rulesTab" class="rules-copy">
             <h3>Hišna pravila – 4 igralci / 2 na 2</h3>
             <p><b>Pari:</b> partnerja sedita nasproti: igralca 1+3 proti 2+4. Pari ostanejo enaki do konca partije.</p>
             <p><b>Karte:</b> J &lt; Q &lt; K &lt; 10 &lt; A. Točke: J=2, Q=3, K=4, 10=10, A=11.</p>
@@ -106,11 +105,9 @@
             <p><b>Veliki 9:</b> brez adutov, samo barvanje; igralec mora pobrati vseh 5 štihov.</p>
             <p><b>Veliki z aduti 12:</b> kot Veliki, vendar aduti veljajo.</p>
             <p><b>18 / 24:</b> 18 se lahko kliče s petimi kartami iste barve, 24 pa s petimi kartami rufanega aduta. To sta avtomatski igri brez odigravanja štihov.</p>
-            <p><b>Partija:</b> poražena ekipa zapisuje vrednost igre oziroma 1/2/3 pri navadni igri. Partija se igra do 25.</p>
+            <p><b>Partija:</b> poražena ekipa zapisuje vrednost igre oziroma 1/2/3 pri navadni igri. Ciljni rezultat določi gostitelj.</p>
             <p class="muted"><b>Opomba:</b> pravila za 3 igralce bomo uredili posebej; do takrat je ustvarjanje nove sobe za 3 v vmesniku izklopljeno.</p>
-          </div></details>
-          <section id="hostScoreTools" class="drawer-section hidden"><h3>Popravi skupni rezultat</h3><div id="scoreTools"></div></section>
-          <button id="leaveRoomBtn" class="danger big" type="button">Zapusti sobo</button>
+          </div>
         </aside>
 
         <aside id="chatPanel" class="chat-panel hidden" aria-label="Klepet">
@@ -122,12 +119,6 @@
           </form>
         </aside>
 
-        <div id="leaveDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
-          <section class="modal-card"><h2 id="leaveTitle">Zapusti sobo?</h2><p>Ali res želiš zapustiti trenutno sobo?</p><div class="modal-actions"><button id="leaveCancel" class="ghost">Ostani</button><button id="leaveConfirm" class="danger">Zapusti sobo</button></div></section>
-        </div>
-        <div id="roundDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="roundResultTitle">
-          <section class="modal-card result-card"><span class="eyebrow">Konec runde</span><h2 id="roundResultTitle"></h2><div id="roundResultBody"></div><button id="roundDialogClose" class="primary big">V redu</button></section>
-        </div>
       </section>
     </main>
 
@@ -136,6 +127,15 @@
     </footer>
 
     <div id="toast" class="toast hidden"></div>
+    <div id="leaveDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
+      <section class="modal-card"><h2 id="leaveTitle">Zapusti sobo?</h2><p>Ali res želiš zapustiti trenutno sobo?</p><div class="modal-actions"><button id="leaveCancel" class="ghost">Ostani</button><button id="leaveConfirm" class="danger">Zapusti sobo</button></div></section>
+    </div>
+    <div id="scoreDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="scoreDialogTitle">
+      <section class="modal-card"><h2 id="scoreDialogTitle">Popravi rezultat</h2><div id="scoreTools"></div><div class="modal-actions"><button id="scoreDialogClose" class="ghost">Zapri</button></div></section>
+    </div>
+    <div id="roundDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="roundResultTitle">
+      <section class="modal-card result-card"><span class="eyebrow">Konec runde</span><h2 id="roundResultTitle"></h2><div id="roundResultBody"></div><button id="roundDialogClose" class="primary big">V redu</button></section>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

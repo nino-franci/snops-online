@@ -6,7 +6,6 @@ const homeView = $('#homeView');
 const gameView = $('#gameView');
 const nameInput = $('#nameInput');
 const roomCodeInput = $('#roomCodeInput');
-const targetScoreInput = $('#targetScoreInput');
 const homeError = $('#homeError');
 const toastEl = $('#toast');
 const connectionBadge = $('#connectionBadge');
@@ -27,6 +26,8 @@ let chatOpen = false;
 let unreadChatCount = 0;
 let chatInitialized = false;
 let lastChatMessageId = null;
+let newRoomPublic = false;
+let publicRooms = [];
 
 const cardAssetUrls = ['J','Q','K','10','A'].flatMap((rank) =>
   ['C','D','H','S'].map((suit) => `/cards/${rank}${suit}.png`)
@@ -107,15 +108,15 @@ function renderScoreboard() {
       const names = t.members.map((i) => state.players[i]?.name).filter(Boolean).join(' + ');
       const oldScore = previousTeamPenalties?.[t.index];
       const gain = Number.isFinite(oldScore) && t.penalty > oldScore ? t.penalty - oldScore : 0;
-      return `<div class="score-card team-card ${state.myTeam === t.index ? 'me' : ''}">
-        <div class="score-name"><b>Ekipa ${t.index + 1}</b></div>
+      return `<div class="score-card team-card ${state.myTeam === t.index ? 'me' : ''} ${isHost ? 'editable-score' : ''}">
+        <div class="score-name"><b>${safe(t.name || `Ekipa ${t.index + 1}`)}</b></div>
         <div class="team-names">${safe(names)}</div>
         <div class="score-main"><strong class="${gain ? 'score-gained' : ''}">${gain ? `<span>${oldScore}</span><em>+${gain}</em><span>→ ${t.penalty}</span>` : t.penalty}</strong><span class="score-small">/ ${state.targetScore}</span></div>
       </div>`;
     }).join('');
-    $('#hostScoreTools').classList.toggle('hidden', !isHost);
-    $('#scoreTools').innerHTML = isHost ? state.teams.map((t) => `<div class="score-adjust-row"><span>Ekipa ${t.index + 1}: <b>${t.penalty}</b></span><span><button data-team-score="${t.index}" data-delta="-1">−</button><button data-team-score="${t.index}" data-delta="1">+</button></span></div>`).join('') : '';
+    $('#scoreTools').innerHTML = isHost ? state.teams.map((t) => `<div class="score-adjust-row"><span>${safe(t.name || `Ekipa ${t.index + 1}`)}: <b>${t.penalty}</b></span><span><button data-team-score="${t.index}" data-delta="-1">−</button><button data-team-score="${t.index}" data-delta="1">+</button></span></div>`).join('') : '';
     $$('[data-team-score]').forEach((b) => b.addEventListener('click', () => socket.emit('adjustScore', { team:Number(b.dataset.teamScore), delta:Number(b.dataset.delta) })));
+    $('#scoreboard').onclick = isHost && state.phase !== 'lobby' ? () => $('#scoreDialog').classList.remove('hidden') : null;
     previousTeamPenalties = state.teams.map((t) => t.penalty);
     return;
   }
@@ -165,14 +166,15 @@ function cardBacks(count) {
   return `<div class="back-fan" aria-label="${count} skritih kart">${Array.from({length:visible},()=>'<span class="mini-back"></span>').join('')}</div>`;
 }
 function renderPlayersAround() {
+  const hostCanArrange = state.phase === 'lobby' && state.players[state.me]?.isHost;
   const players = state.players.map((p) => {
     const mine = p.index === state.me;
     const partner = state.playerCount===4 && ((p.index-state.me+4)%4===2);
     const turn = state.turnIndex===p.index;
-    return `<div class="table-seat ${relativeSeat(p.index)} ${turn?'turn':''} ${mine?'mine':''}">
+    return `<button type="button" class="table-seat ${relativeSeat(p.index)} ${turn?'turn':''} ${mine?'mine':''} ${hostCanArrange?'arrangeable':''} ${seatSwapFrom===p.index?'picked':''}" ${hostCanArrange ? `draggable="true" data-seat-chip="${p.index}" data-drop-seat="${p.index}"` : 'tabindex="-1"'}>
       <div class="seat-name">${turn?'<span class="turn-dot"></span>':''}<b>${p.isBot?'🤖 ':''}${safe(p.name)}</b>${mine?' <span class="you">ti</span>':partner?' <span class="partner">partner</span>':''}</div>
       ${mine ? `<span class="seat-meta">${p.handCount} kart</span>` : cardBacks(p.handCount)}
-    </div>`;
+    </button>`;
   }).join('');
   const pileOwner = state.myTeamPileOwner;
   const pile = Number.isInteger(pileOwner) && state.myTeamCapturedCount > 0
@@ -262,25 +264,18 @@ function scheduleTrickAnimation() {
 function renderLobbyActions() {
   const me = state.players[state.me];
   const full = state.players.length === state.playerCount;
-  const seatLabels = ['Sedež 1','Sedež 2','Sedež 3','Sedež 4'];
-  const visualManager = me?.isHost && state.playerCount===4 ? `<div class="team-manager visual-manager">
-    <h4>Razporedi ekipe</h4>
-    <p class="muted">Povleci igralca na drug sedež ali tapni dva igralca za zamenjavo. Nasprotna sedeža sta partnerja.</p>
-    <div class="seat-editor-board">
-      ${state.players.map((p)=>`<button type="button" class="seat-editor-chip seat-editor-${p.index} ${seatSwapFrom===p.index?'picked':''}" draggable="true" data-seat-chip="${p.index}" data-drop-seat="${p.index}">
-        <small>${seatLabels[p.index]}</small><b>${p.isBot?'🤖 ':''}${safe(p.name)}</b><span>${p.index%2===0?'Ekipa A':'Ekipa B'}</span>
-      </button>`).join('')}
-      <div class="pair-line pair-a"></div><div class="pair-line pair-b"></div>
-      <div class="seat-editor-center">A ↕<br>B ↔</div>
-    </div>
-    <div class="pair-summary"><span><b>Ekipa A:</b> ${safe(state.players[0]?.name||'—')} + ${safe(state.players[2]?.name||'—')}</span><span><b>Ekipa B:</b> ${safe(state.players[1]?.name||'—')} + ${safe(state.players[3]?.name||'—')}</span></div>
-    <div class="bot-manager">${state.players.length < state.playerCount ? '<button type="button" class="secondary" id="addBotBtn">🤖 Dodaj bota</button>' : ''}${state.players.filter(p=>p.isBot).map(p=>`<button type="button" class="ghost bot-remove" data-remove-bot="${p.index}">Odstrani ${safe(p.name)}</button>`).join('')}</div>
-    <p class="muted bot-note">Bot vedno igra po strogih pravilih, tudi če je soba nastavljena na ohlapna pravila.</p>
-  </div>` : '';
   return `<div class="action-box lobby-action"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
-    ${full ? '<p class="ready-note">Vsi ste za mizo. Gostitelj naj uredi sedeže in začne deljenje.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}
-    ${visualManager}
-    ${me?.isHost ? `<div class="strict-lobby"><span><b>Stroga pravila</b><small>${state.strictRules ? ' Program prepreči napačno karto.' : ' Igralec lahko švingla.'}</small></span><div class="segmented compact-seg"><button type="button" class="seg ${state.strictRules?'active':''}" data-lobby-strict="1">DA</button><button type="button" class="seg ${!state.strictRules?'active':''}" data-lobby-strict="0">NE</button></div></div><button id="startBtn" class="primary big" ${full?'':'disabled'}>Sedeži so pravilni · začni deljenje</button>` : `<p class="muted">Gostitelj razporedi ekipe in začne deljenje.</p><p class="muted">Stroga pravila: <b>${state.strictRules?'DA':'NE'}</b></p>`}
+    ${full ? '<p class="ready-note">Vsi ste za mizo.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}
+    ${me?.isHost ? `<p class="muted lobby-seat-help">Tapni dva igralca na mizi ali ju povleci, da zamenjaš sedeža.</p>
+      <div class="bot-manager">${state.players.length < state.playerCount ? '<button type="button" class="secondary" id="addBotBtn">🤖 Dodaj bota</button>' : ''}${state.players.filter(p=>p.isBot).map(p=>`<button type="button" class="ghost bot-remove" data-remove-bot="${p.index}">Odstrani ${safe(p.name)}</button>`).join('')}</div>
+      <section class="lobby-settings"><h3>Nastavitve</h3>
+        <label>Ime ekipe 1<input id="teamName0" maxlength="24" value="${safe(state.teams[0].name)}" /></label>
+        <label>Ime ekipe 2<input id="teamName1" maxlength="24" value="${safe(state.teams[1].name)}" /></label>
+        <label>Igra do<input id="lobbyTargetScore" type="number" min="7" max="99" value="${state.targetScore}" /></label>
+        <div class="setting-row"><span>Stroga pravila</span><div class="segmented compact-seg"><button type="button" class="seg ${state.strictRules?'active':''}" data-setting-strict="1">DA</button><button type="button" class="seg ${!state.strictRules?'active':''}" data-setting-strict="0">NE</button></div></div>
+        <div class="setting-row"><span>Vidnost sobe</span><div class="segmented compact-seg"><button type="button" class="seg ${!state.isPublic?'active':''}" data-setting-public="0">Zasebna</button><button type="button" class="seg ${state.isPublic?'active':''}" data-setting-public="1">Javna</button></div></div>
+        <button id="saveLobbySettings" class="secondary">Shrani nastavitve</button>
+      </section><button id="startBtn" class="primary big" ${full?'':'disabled'}>Začni igro</button>` : `<p class="muted">Gostitelj razporedi ekipe in uredi nastavitve.</p><div class="guest-settings"><span>${safe(state.teams[0].name)}</span><span>${safe(state.teams[1].name)}</span><span>Igra do ${state.targetScore}</span><span>Stroga pravila: ${state.strictRules?'DA':'NE'}</span></div>`}
   </div>`;
 }
 
@@ -349,20 +344,20 @@ function renderRoundDialog() {
   if (lastRoundDialogKey === key) return;
   lastRoundDialogKey = key;
   const winnerNames = r.winners.map((i) => state.players[i]?.name).filter(Boolean).join(' in ');
-  $('#roundResultTitle').textContent = `Zmagala je ekipa ${r.winnerTeam + 1}`;
+  $('#roundResultTitle').textContent = `Zmagala je ${state.teams[r.winnerTeam].name}`;
   const multiplierText = r.multiplier > 1 ? `<p class="muted">Vrednost: ${r.baseAmount} × ${r.multiplier} = ${r.amount}.</p>` : '';
-  $('#roundResultBody').innerHTML = `<p><b>${safe(winnerNames)}</b></p><p>${safe(r.reason)}</p>${multiplierText}<div class="result-score">Ekipa ${r.loserTeam + 1}: <span>${state.teams[r.loserTeam].penalty - r.amount}</span><em>+${r.amount}</em><strong>→ ${state.teams[r.loserTeam].penalty}</strong></div>`;
+  $('#roundResultBody').innerHTML = `<p><b>${safe(winnerNames)}</b></p><p>${safe(r.reason)}</p>${multiplierText}<div class="result-score">${safe(state.teams[r.loserTeam].name)}: <span>${state.teams[r.loserTeam].penalty - r.amount}</span><em>+${r.amount}</em><strong>→ ${state.teams[r.loserTeam].penalty}</strong></div>`;
   $('#roundDialog').classList.remove('hidden');
 }
 function renderEndActions() {
   const r = state.roundResult;
   let title = 'Konec runde';
-  if (r && state.playerCount===4) title = `Zmaga ekipa ${r.winnerTeam + 1}`;
+  if (r && state.playerCount===4) title = `Zmaga: ${state.teams[r.winnerTeam].name}`;
   if (state.phase === 'match_end' && state.playerCount===4) {
     const losingTeam = state.teams.find((t) => t.penalty >= state.targetScore)?.index ?? r?.loserTeam;
-    title = `🏆 Partijo dobi ekipa ${losingTeam === 0 ? 2 : 1}`;
+    title = `🏆 Partijo dobi ${state.teams[losingTeam === 0 ? 1 : 0].name}`;
   }
-  return `<div class="action-box"><h3>${title}</h3>${r?`<p class="muted">Ekipa ${r.loserTeam+1} piše <b>${r.amount}</b>${r.multiplier>1?` (${r.baseAmount} × ${r.multiplier})`:''}. ${safe(r.reason)}</p>`:''}${state.phase==='round_end'&&state.players[state.me]?.isHost?'<button id="nextRoundBtn" class="primary big">Naslednja runda</button>':''}</div>`;
+  return `<div class="action-box"><h3>${title}</h3>${r?`<p class="muted">${safe(state.teams[r.loserTeam].name)} piše <b>${r.amount}</b>${r.multiplier>1?` (${r.baseAmount} × ${r.multiplier})`:''}. ${safe(r.reason)}</p>`:''}${state.phase==='round_end'&&state.players[state.me]?.isHost?'<button id="nextRoundBtn" class="primary big">Naslednja runda</button>':''}</div>`;
 }
 
 function renderActions() {
@@ -381,7 +376,12 @@ function renderActions() {
   $('#startBtn')?.addEventListener('click', () => socket.emit('startGame'));
   $('#addBotBtn')?.addEventListener('click', () => socket.emit('addBot'));
   $$('[data-remove-bot]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); socket.emit('removeBot', { playerIndex:Number(b.dataset.removeBot) }); }));
-  $$('[data-lobby-strict]').forEach((b) => b.addEventListener('click', () => socket.emit('setStrictRules', { enabled: b.dataset.lobbyStrict === '1' })));
+  $$('[data-setting-strict]').forEach((b) => b.addEventListener('click', () => $$('[data-setting-strict]').forEach((item) => item.classList.toggle('active', item === b))));
+  $$('[data-setting-public]').forEach((b) => b.addEventListener('click', () => $$('[data-setting-public]').forEach((item) => item.classList.toggle('active', item === b))));
+  $('#saveLobbySettings')?.addEventListener('click', () => socket.emit('setLobbySettings', {
+    targetScore:Number($('#lobbyTargetScore').value), strictRules:$('[data-setting-strict].active').dataset.settingStrict === '1',
+    isPublic:$('[data-setting-public].active').dataset.settingPublic === '1', teamNames:[$('#teamName0').value,$('#teamName1').value]
+  }));
   $$('[data-seat-chip]').forEach((el) => {
     el.addEventListener('click', () => {
       const idx = Number(el.dataset.seatChip);
@@ -432,7 +432,6 @@ function renderHand() {
   }));
 }
 function renderLogs() {
-  $('#logTab').innerHTML=state.log.slice().reverse().map((l)=>`<div class="log-line">${safe(l.text)}</div>`).join('')||'<div class="muted">Še brez dogodkov.</div>';
   const chat=$('#chatMessages');
   chat.innerHTML=state.chat.map((m)=>`<div class="chat-line"><b>${safe(m.name)}:</b> ${safe(m.text)}</div>`).join('')||'<div class="muted">Klepet je prazen.</div>';
   chat.scrollTop=chat.scrollHeight;
@@ -450,16 +449,26 @@ function render() {
   renderRoundDialog();
 }
 
+function joinRoom(code) {
+  const name=nameInput.value.trim(); code=String(code || '').trim().toUpperCase();
+  if(!name||code.length!==5){ homeError.textContent='Vpiši ime in izberi ali vnesi sobo.'; return; } homeError.textContent='';
+  const token=localStorage.getItem(`snops-token-${code}`)||`p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  socket.emit('joinRoom',{name,code,token},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Pridružitev ni uspela.'; saveSession(code,res.token,name); enterGame(code); });
+}
+function renderPublicRooms(rooms) {
+  publicRooms = Array.isArray(rooms) ? rooms : [];
+  $('#publicRoomList').innerHTML = publicRooms.length ? publicRooms.map((room) => `<button type="button" class="public-room" data-public-room="${safe(room.code)}"><span><b>${safe(room.name)}</b><small>${room.players}/${room.capacity} igralcev</small></span><strong>Pridruži se</strong></button>`).join('') : '<p class="muted empty-rooms">Trenutno ni odprtih javnih sob.</p>';
+  $$('[data-public-room]').forEach((button) => button.addEventListener('click', () => joinRoom(button.dataset.publicRoom)));
+}
+$$('[data-room-public]').forEach((button) => button.addEventListener('click', () => { newRoomPublic = button.dataset.roomPublic === '1'; $$('[data-room-public]').forEach((item) => item.classList.toggle('active', item === button)); }));
+$('#refreshRoomsBtn').addEventListener('click', () => socket.emit('getRoomList', renderPublicRooms));
 $('#createBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(); if(!name) return homeError.textContent='Vpiši ime.'; homeError.textContent='';
   const tempToken=`p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  socket.emit('createRoom',{name,playerCount,targetScore:Number(targetScoreInput.value),strictRules:true,token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
+  socket.emit('createRoom',{name,playerCount,targetScore:25,strictRules:true,isPublic:newRoomPublic,token:tempToken},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Napaka.'; roomCodeInput.value=res.code; saveSession(res.code,res.token,name); enterGame(res.code); });
 });
 $('#joinBtn').addEventListener('click',()=>{
-  const name=nameInput.value.trim(), code=roomCodeInput.value.trim().toUpperCase();
-  if(!name||code.length!==5)return homeError.textContent='Vpiši ime in 5-mestno kodo sobe.'; homeError.textContent='';
-  const token=localStorage.getItem(`snops-token-${code}`)||`p-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  socket.emit('joinRoom',{name,code,token},(res)=>{ if(!res.ok)return homeError.textContent=res.error||'Pridružitev ni uspela.'; saveSession(code,res.token,name); enterGame(code); });
+  joinRoom(roomCodeInput.value);
 });
 roomCodeInput.addEventListener('input',()=>roomCodeInput.value=roomCodeInput.value.toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,5));
 $('#shareBtn').addEventListener('click',async()=>{
@@ -467,8 +476,6 @@ $('#shareBtn').addEventListener('click',async()=>{
   try { if(navigator.share) await navigator.share({title:'Šnops Online',text,url}); else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Povezava je kopirana.'); } } catch(_){}
 });
 $('#chatForm').addEventListener('submit',(e)=>{ e.preventDefault(); const input=$('#chatInput'), text=input.value.trim(); if(!text)return; socket.emit('chat',{text}); input.value=''; });
-$('#menuToggle').addEventListener('click',()=>$('#gameDrawer').classList.remove('hidden'));
-$('#menuClose').addEventListener('click',()=>$('#gameDrawer').classList.add('hidden'));
 function openChat() {
   if (chatOpen) return;
   chatOpen = true; unreadChatCount = 0; $('#chatUnread').classList.add('hidden');
@@ -483,10 +490,14 @@ function closeChat({ fromHistory = false } = {}) {
 }
 $('#chatToggle').addEventListener('click',openChat);
 $('#chatClose').addEventListener('click',()=>closeChat());
+$('#rulesToggle').addEventListener('click',()=>$('#rulesPanel').classList.remove('hidden'));
+$('#rulesClose').addEventListener('click',()=>$('#rulesPanel').classList.add('hidden'));
 window.addEventListener('popstate',()=>{ if (chatOpen) closeChat({ fromHistory:true }); });
-window.addEventListener('keydown',(event)=>{ if (event.key === 'Escape' && chatOpen) closeChat(); });
-$('#leaveRoomBtn').addEventListener('click',()=>$('#leaveDialog').classList.remove('hidden'));
+window.addEventListener('keydown',(event)=>{ if (event.key !== 'Escape') return; if (chatOpen) closeChat(); else if (!$('#rulesPanel').classList.contains('hidden')) $('#rulesPanel').classList.add('hidden'); else $('#leaveDialog').classList.add('hidden'); });
+$('#leaveRoomBtn').addEventListener('click',()=>{ if(chatOpen) closeChat(); $('#rulesPanel').classList.add('hidden'); $('#leaveDialog').classList.remove('hidden'); setTimeout(()=>$('#leaveCancel').focus(),0); });
 $('#leaveCancel').addEventListener('click',()=>$('#leaveDialog').classList.add('hidden'));
+$('#leaveDialog').addEventListener('click',(event)=>{ if(event.target === $('#leaveDialog')) $('#leaveDialog').classList.add('hidden'); });
+$('#scoreDialogClose').addEventListener('click',()=>$('#scoreDialog').classList.add('hidden'));
 $('#leaveConfirm').addEventListener('click',()=>{
   if (state?.code) localStorage.removeItem(`snops-token-${state.code}`);
   history.replaceState(null, '', location.pathname); location.reload();
@@ -507,8 +518,10 @@ socket.on('state',(next)=>{
   state=next; if(state.phase!=='talon_exchange') selectedTalon.clear(); render();
 });
 socket.on('gameError',(message)=>toast(message));
+socket.on('roomList',renderPublicRooms);
 socket.on('connect',()=>{
   connectionBadge.textContent='online'; connectionBadge.className='status online';
+  socket.emit('getRoomList',renderPublicRooms);
   const code=new URLSearchParams(location.search).get('room')?.toUpperCase(); const name=localStorage.getItem('snops-name'); const token=code?localStorage.getItem(`snops-token-${code}`):null;
   if(code&&name&&token&&!state) socket.emit('joinRoom',{name,code,token},(res)=>{ if(res.ok)enterGame(code); });
 });
