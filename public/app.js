@@ -20,7 +20,8 @@ let state = null;
 let selectedTalon = new Set();
 let deferredInstall = null;
 let seatSwapFrom = null;
-let focusEnabled = localStorage.getItem('snops-focus') === '1';
+const savedFocusPreference = localStorage.getItem('snops-focus');
+let focusEnabled = savedFocusPreference === null ? true : savedFocusPreference === '1';
 let strictRulesChoice = true;
 let trickAnimationTimer = null;
 
@@ -415,7 +416,8 @@ function renderLogs() {
 function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
-  const focusAvailable = state.playerCount === 4 && state.players.length === 4;
+  // Focus mode is for card play, not for the lobby and setup controls.
+  const focusAvailable = state.playerCount === 4 && state.players.length === 4 && state.phase === 'playing';
   const focusOn = focusAvailable && focusEnabled;
   gameView.classList.toggle('focus-mode', focusOn);
   document.body.classList.toggle('focus-active', focusOn);
