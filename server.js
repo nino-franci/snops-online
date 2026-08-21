@@ -31,6 +31,7 @@ app.get('/app-meta', (_req, res) => res.json({ author: 'Nino Franci', version: A
 
 const rooms = new Map();
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'];
+const SUIT_NAMES = { hearts: 'srce', diamonds: 'kara', clubs: 'križ', spades: 'pik' };
 const RANKS = ['J', 'Q', 'K', '10', 'A'];
 const CARD_POINTS = { J: 2, Q: 3, K: 4, '10': 10, A: 11 };
 const RANK_POWER = { J: 1, Q: 2, K: 3, '10': 4, A: 5 };
@@ -99,7 +100,7 @@ function createRoom(hostSocket, payload) {
     contra: null, multiplier: 1,
     trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [], meldDisplay: null,
     trickWinner: null, trickCollectAt: null, trickResolveTimer: null,
-    roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], melds: [],
+    roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], teamPileOwner: [null, null], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
   rooms.set(room.code, room);
@@ -139,6 +140,7 @@ function startRound(room) {
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
   room.captured = Array.from({ length: room.playerCount }, () => []);
+  room.teamPileOwner = [null, null];
   room.melds = [];
   room.roundResult = null;
 
@@ -219,7 +221,11 @@ function finishAuction(room) {
   log(room, `${room.players[room.bidderIndex].name} igra ${CONTRACTS[room.contract].label}.`);
 
   if (CONTRACTS[room.contract].instant) {
-    return finishRound(room, teamOf(room.bidderIndex), otherTeam(teamOf(room.bidderIndex)), CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} je avtomatsko uspela.`);
+    const bidder = room.players[room.bidderIndex];
+    const detail = room.contract === 'twentyfour'
+      ? `vseh pet kart je bilo v rufanem adutu (${SUIT_NAMES[room.trumpSuit]})`
+      : `vseh pet kart je bilo iste barve (${SUIT_NAMES[room.hands[room.bidderIndex][0].suit]})`;
+    return finishRound(room, teamOf(room.bidderIndex), otherTeam(teamOf(room.bidderIndex)), CONTRACTS[room.contract].value, `${bidder.name} je igral ${CONTRACTS[room.contract].label}; ${detail}, zato je igra avtomatsko uspela.`);
   }
   beginContra(room);
 }
@@ -338,7 +344,7 @@ function finishRound(room, winnerTeam, loserTeam, baseAmount, reason) {
   log(room, `${teamName(room, loserTeam)} pišeta ${amount}. ${reason}`);
 }
 
-function normalFinishByCount(room, countingTeam) {
+function normalFinishByCount(room, countingTeam, countingPlayer = null) {
   activatePendingMelds(room, countingTeam);
   const score = teamRoundScore(room, countingTeam);
   if (score < 66 || teamTricks(room, countingTeam) < 1) return false;
@@ -346,7 +352,8 @@ function normalFinishByCount(room, countingTeam) {
   const loserScore = teamRoundScore(room, loserTeam);
   const loserTrickCount = teamTricks(room, loserTeam);
   const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
-  finishRound(room, countingTeam, loserTeam, amount, `${teamName(room, countingTeam)} je pravilno štela ${score}.`);
+  const counterName = Number.isInteger(countingPlayer) ? room.players[countingPlayer]?.name : null;
+  finishRound(room, countingTeam, loserTeam, amount, `${counterName || teamName(room, countingTeam)} je štel; ekipa ${countingTeam + 1} je imela ${score} točk, zato je zmagala.`);
   return true;
 }
 
@@ -358,14 +365,14 @@ function resolveSmallTrick(room) {
   // klient vseh 5 krogov vizualno pusti na mizi od sredine proti igralcem.
   const completedTrick = room.trick.map((p) => ({ playerIndex: p.playerIndex, card: p.card }));
   room.smallHistory.push(completedTrick);
-  const lowerSameSuit = room.trick.some((p) => p.playerIndex !== bidder && p.card.suit === bidderPlay.card.suit && RANK_POWER[p.card.rank] < RANK_POWER[bidderPlay.card.rank]);
+  const lowerSameSuit = room.trick.find((p) => p.playerIndex !== bidder && p.card.suit === bidderPlay.card.suit && RANK_POWER[p.card.rank] < RANK_POWER[bidderPlay.card.rank]);
   room.trickNo += 1;
   if (lowerSameSuit) {
     room.trick = [];
-    return finishRound(room, otherTeam(teamOf(bidder)), teamOf(bidder), CONTRACTS.small.value, 'Mali ni uspel: v enem štihu je padla nižja karta iste barve.');
+    return finishRound(room, otherTeam(teamOf(bidder)), teamOf(bidder), CONTRACTS.small.value, `${room.players[bidder].name} je igral Mali, vendar je ${room.players[lowerSameSuit.playerIndex].name} odigral nižjo karto iste barve (${lowerSameSuit.card.rank} ${SUIT_NAMES[lowerSameSuit.card.suit]}) od njegove ${bidderPlay.card.rank}, zato Mali ni uspel.`);
   }
   room.trick = [];
-  if (room.trickNo >= 5) return finishRound(room, teamOf(bidder), otherTeam(teamOf(bidder)), CONTRACTS.small.value, 'Mali je uspel v vseh 5 štihih.');
+  if (room.trickNo >= 5) return finishRound(room, teamOf(bidder), otherTeam(teamOf(bidder)), CONTRACTS.small.value, `${room.players[bidder].name} je igral Mali in bil pravilno najnižji v vseh petih štihih, zato je zmagala ekipa ${teamOf(bidder) + 1}.`);
   room.trickLeader = bidder;
   room.turnIndex = bidder;
 }
@@ -373,15 +380,17 @@ function resolveSmallTrick(room) {
 function resolveStandardTrick(room) {
   const winning = currentWinningPlay(room);
   const winner = winning.playerIndex;
+  const winnerTeam = room.playerCount === 4 ? teamOf(winner) : null;
   const points = room.trick.reduce((sum, p) => sum + p.card.points, 0);
   room.roundPoints[winner] += points;
   room.trickCounts[winner] += 1;
   room.captured[winner].push(...room.trick.map((p) => p.card));
+  if (winnerTeam !== null && room.teamPileOwner[winnerTeam] === null) room.teamPileOwner[winnerTeam] = winner;
   room.lastTrickWinner = winner;
   room.meldDisplay = null;
   room.trickNo += 1;
   activatePendingMelds(room, teamOf(winner));
-  log(room, `${room.players[winner].name} pobere štih (+${points}).`);
+  log(room, `${room.players[winner].name} pobere štih.`);
   room.trick = [];
   room.trickLeader = winner;
   room.turnIndex = winner;
@@ -391,18 +400,18 @@ function resolveStandardTrick(room) {
   const cardsLeft = room.hands.reduce((sum, h) => sum + h.length, 0);
 
   if (room.contract === 'schnops') {
-    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, 'Šnops ni uspel: štih je pobral drug igralec.');
+    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, `${room.players[bidder].name} je igral Šnops, vendar je štih pobral ${room.players[winner].name} z ${winning.card.rank} ${SUIT_NAMES[winning.card.suit]}, zato Šnops ni uspel.`);
     if (room.trickNo >= 3) {
       const score = teamRoundScore(room, bidderTeam);
-      if (score >= 66) return finishRound(room, bidderTeam, otherTeam(bidderTeam), 6, `Šnops uspel: ${score} točk v 3 štihih.`);
-      return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, `Šnops ni uspel: po 3 štihih samo ${score} točk.`);
+      if (score >= 66) return finishRound(room, bidderTeam, otherTeam(bidderTeam), 6, `${room.players[bidder].name} je v največ treh štihih zbral ${score} točk, zato je Šnops uspel.`);
+      return finishRound(room, otherTeam(bidderTeam), bidderTeam, 6, `${room.players[bidder].name} je po treh štihih zbral samo ${score} točk; za Šnops jih je potreboval 66, zato ni uspel.`);
     }
     return;
   }
 
   if (room.contract === 'big' || room.contract === 'big_trump') {
-    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} ni uspel: štih je pobral drug igralec.`);
-    if (cardsLeft === 0) return finishRound(room, bidderTeam, otherTeam(bidderTeam), CONTRACTS[room.contract].value, `${CONTRACTS[room.contract].label} uspel: vseh 5 štihov.`);
+    if (winner !== bidder) return finishRound(room, otherTeam(bidderTeam), bidderTeam, CONTRACTS[room.contract].value, `${room.players[bidder].name} je igral ${CONTRACTS[room.contract].label}, vendar je ${room.players[winner].name} pobral štih z močnejšo karto (${winning.card.rank} ${SUIT_NAMES[winning.card.suit]}).`);
+    if (cardsLeft === 0) return finishRound(room, bidderTeam, otherTeam(bidderTeam), CONTRACTS[room.contract].value, `${room.players[bidder].name} je igral ${CONTRACTS[room.contract].label} in pobral vseh pet štihov, zato je igra uspela.`);
     return;
   }
 
@@ -414,7 +423,7 @@ function resolveStandardTrick(room) {
     const loserScore = teamRoundScore(room, loserTeam);
     const loserTrickCount = teamTricks(room, loserTeam);
     const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
-    return finishRound(room, winnerTeam, loserTeam, amount, `Karte so odigrane. Rezultat ${t0}:${t1}.`);
+    return finishRound(room, winnerTeam, loserTeam, amount, `Vse karte so bile odigrane. Ekipa ${winnerTeam + 1} je zmagala z rezultatom ${t0}:${t1}; ekipa ${loserTeam + 1} je zbrala ${loserScore} točk in ${loserTrickCount} štihov, zato piše ${amount}.`);
   }
 }
 
@@ -557,11 +566,11 @@ function botDoAction(room) {
     // Bot sam klikne "štejem", ko je to legalno in ima 66+.
     if (room.contract === 'normal' && room.trick.length === 0 && room.lastTrickWinner !== null && teamOf(room.lastTrickWinner) === team && teamRoundScore(room,team) >= 66) {
       log(room, `${room.players[idx].name} reče: ŠTEJEM (${teamRoundScore(room,team)}).`);
-      normalFinishByCount(room, team);
+      normalFinishByCount(room, team, idx);
       return true;
     }
     if (room.contract === 'schnops' && idx === room.bidderIndex && room.trick.length === 0 && room.trickNo > 0 && teamRoundScore(room,team) >= 66) {
-      finishRound(room, team, otherTeam(team), 6, `Bot je zaprl Šnops pri ${teamRoundScore(room,team)} točkah.`);
+      finishRound(room, team, otherTeam(team), 6, `${room.players[idx].name} je zaprl Šnops pri ${teamRoundScore(room,team)} točkah, zato je njegova ekipa zmagala.`);
       return true;
     }
     // Če bot začne štih in ima 20/40, ga napove ter odigra Q ali K.
@@ -609,7 +618,10 @@ function publicState(room, socketId) {
   const hostIndex = room.players.findIndex((p) => p.token === room.hostToken);
   const four = room.playerCount === 4;
   const myTeam = four && me >= 0 ? teamOf(me) : null;
-  const teamScores = four ? [teamRoundScore(room, 0), teamRoundScore(room, 1)] : null;
+  const myTeamScore = four && myTeam !== null ? teamRoundScore(room, myTeam) : null;
+  const myTeamCapturedCount = four && myTeam !== null
+    ? teamMembers(myTeam).reduce((sum, i) => sum + (room.captured[i]?.length || 0), 0)
+    : null;
   const canCount = four && room.phase === 'playing' && room.contract === 'normal' && room.trick.length === 0 && room.lastTrickWinner !== null && myTeam === teamOf(room.lastTrickWinner);
   const canClose = four && room.phase === 'playing' && room.contract === 'schnops' && me === room.bidderIndex && room.trick.length === 0 && room.trickNo > 0;
 
@@ -622,12 +634,15 @@ function publicState(room, socketId) {
     players: room.players.map((p, i) => ({
       index: i, name: p.name, connected: p.isBot ? true : p.connected, isHost: i === hostIndex, isBot: Boolean(p.isBot), handCount: room.hands[i]?.length || 0,
       team: four ? teamOf(i) : null, matchPoints: four ? room.teamPenalty[teamOf(i)] : 0,
-      roundPoints: room.roundPoints[i] || 0, tricks: room.trickCounts[i] || 0
+      roundPoints: !four || teamOf(i) === myTeam ? room.roundPoints[i] || 0 : null,
+      tricks: !four || teamOf(i) === myTeam ? room.trickCounts[i] || 0 : null
     })),
     teams: four ? [
-      { index: 0, members: [0,2], penalty: room.teamPenalty[0], roundPoints: teamScores[0], tricks: teamTricks(room,0) },
-      { index: 1, members: [1,3], penalty: room.teamPenalty[1], roundPoints: teamScores[1], tricks: teamTricks(room,1) }
+      { index: 0, members: [0,2], penalty: room.teamPenalty[0] },
+      { index: 1, members: [1,3], penalty: room.teamPenalty[1] }
     ] : null,
+    myTeamRoundPoints: myTeamScore, myTeamCapturedCount,
+    myTeamPileOwner: four && myTeam !== null ? room.teamPileOwner[myTeam] : null,
     me, myTeam, myHand: me >= 0 ? (room.hands[me] || []) : [], legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
@@ -827,7 +842,7 @@ io.on('connection', (socket) => {
     if (room.trick.length || room.lastTrickWinner === null || teamOf(room.lastTrickWinner) !== team) return emitError(socket, 'Šteješ lahko po štihu, ki ga je pobrala tvoja ekipa.');
     const score = teamRoundScore(room, team);
     log(room, `${room.players[index].name} reče: ŠTEJEM (${score}).`);
-    if (!normalFinishByCount(room, team)) log(room, `Ni dovolj: ekipa ima ${score}, potrebuje 66.`);
+    if (!normalFinishByCount(room, team, index)) log(room, `Ni dovolj: ekipa ima ${score}, potrebuje 66.`);
     emitRoom(room);
   });
 
@@ -838,8 +853,8 @@ io.on('connection', (socket) => {
     activatePendingMelds(room, teamOf(index));
     const score = teamRoundScore(room, teamOf(index));
     log(room, `${room.players[index].name} reče: ZAPREM (${score}).`);
-    if (score >= 66) finishRound(room, teamOf(index), otherTeam(teamOf(index)), 6, `Šnops zaprt pri ${score} točkah.`);
-    else finishRound(room, otherTeam(teamOf(index)), teamOf(index), 6, `Prezgodaj zaprt Šnops: samo ${score} točk.`);
+    if (score >= 66) finishRound(room, teamOf(index), otherTeam(teamOf(index)), 6, `${room.players[index].name} je zaprl Šnops pri ${score} točkah, zato je njegova ekipa zmagala.`);
+    else finishRound(room, otherTeam(teamOf(index)), teamOf(index), 6, `${room.players[index].name} je prezgodaj zaprl Šnops pri samo ${score} točkah; potreboval jih je 66, zato je njegova ekipa izgubila.`);
     emitRoom(room);
   });
 
@@ -892,5 +907,6 @@ module.exports = {
   scheduleBot,
   queueTrickResolution,
   TRICK_REVIEW_MS,
-  TRICK_COLLECT_MS
+  TRICK_COLLECT_MS,
+  publicState
 };

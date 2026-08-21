@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { createRoom, scheduleBot, startRound, queueTrickResolution, TRICK_REVIEW_MS, TRICK_COLLECT_MS } = require('../server');
+const { createRoom, scheduleBot, startRound, queueTrickResolution, publicState, TRICK_REVIEW_MS, TRICK_COLLECT_MS } = require('../server');
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,11 +63,37 @@ async function testCompletedTrickStaysVisibleBeforeCollection() {
   assert.strictEqual(room.lastTrickWinner, 3);
 }
 
+function testRoundScorePrivacy() {
+  const room = createRoom({ id: 'host-private' }, {
+    name: 'P1', playerCount: 4, targetScore: 25, strictRules: true, token: 'host-private-token'
+  });
+  room.players.push(
+    { name: 'P2', token: 'private-2', socketId: 'socket-2', connected: true, isBot: false },
+    { name: 'P3', token: 'private-3', socketId: 'socket-3', connected: true, isBot: false },
+    { name: 'P4', token: 'private-4', socketId: 'socket-4', connected: true, isBot: false }
+  );
+  room.roundPoints = [20, 11, 14, 10];
+  room.trickCounts = [1, 1, 1, 1];
+  room.captured = [Array(4).fill({}), Array(4).fill({}), Array(4).fill({}), Array(4).fill({})];
+  room.teamPileOwner = [0, 1];
+
+  const state = publicState(room, 'host-private');
+  assert.strictEqual(state.myTeamRoundPoints, 34);
+  assert.strictEqual(state.myTeamCapturedCount, 8);
+  assert.strictEqual(state.myTeamPileOwner, 0);
+  assert.strictEqual(state.players[1].roundPoints, null, 'opponent round points must stay private');
+  assert.strictEqual(state.players[3].tricks, null, 'opponent trick count must stay private');
+  assert.strictEqual(state.teams[1].roundPoints, undefined, 'opponent team score must not be serialized');
+  assert.deepStrictEqual(state.teams.map((team) => team.penalty), [0, 0], 'match score remains public');
+}
+
 (async () => {
   await testBotsAdvanceFromCutPhase();
   console.log('PASS bots advance from cut phase');
   await testCompletedTrickStaysVisibleBeforeCollection();
   console.log('PASS completed trick review and collection delay');
+  testRoundScorePrivacy();
+  console.log('PASS current-round team score remains private');
 })().catch((error) => {
   console.error(error);
   process.exit(1);
