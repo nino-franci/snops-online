@@ -42,37 +42,33 @@ Before coding, determine:
 
 ---
 
-## 3. Git and branch policy
+## 3. Git workflow
 
 Never work directly on `main`.
 
-Every task must use its own branch.
-
-Before starting work:
+For every task:
 
 1. Fetch the latest remote state.
 2. Start from the latest `origin/main`.
-3. Create a new branch using:
-
+3. Create a new branch:
    `codex/<short-task-name>`
+4. Implement and test the requested changes.
+5. If all required tests pass:
+   - commit the intended changes;
+   - push the `codex/...` branch to `origin`;
+   - update local `main` from the latest `origin/main`;
+   - merge the `codex/...` branch into `main`;
+   - push `main` to `origin`.
 
-Examples:
+Do not open Pull Requests unless explicitly requested.
 
-- `codex/fix-20-40`
-- `codex/bot-difficulty`
-- `codex/mobile-table-ui`
-- `codex/security-hardening`
-- `codex/add-game-tests`
+Do not:
+- force-push `main`;
+- rewrite published history;
+- merge if required tests are failing;
+- guess during merge conflicts.
 
-Never reuse an old branch for an unrelated task.
-
-Never:
-
-- commit directly to `main`;
-- push directly to `main`;
-- force-push unless explicitly requested;
-- merge automatically;
-- delete branches without explicit approval.
+A successfully completed and tested task should end with the changes pushed to `origin/main`.
 
 ---
 

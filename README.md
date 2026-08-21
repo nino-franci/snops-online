@@ -23,6 +23,28 @@ Mobilna online igra Šnops za družinsko igranje na ločenih telefonih. Trenutna
 - Socket.IO sobe, ponovna povezava in klepet
 - mobile-first vmesnik in prenovljen videz kart
 
+## Demo prikaz
+
+### Začetni zaslon
+
+![Začetni zaslon na ozkem mobilnem viewportu](playwright-screenshots/01-home-320x568.png)
+
+### Čakalnica za štiri igralce
+
+| Igralec 1 (320 × 568) | Igralec 2 (375 × 667) |
+| --- | --- |
+| ![Čakalnica igralca 1](playwright-screenshots/02-lobby-player1-320x568.png) | ![Čakalnica igralca 2](playwright-screenshots/02-lobby-player2-375x667.png) |
+
+| Igralec 3 (390 × 844) | Igralec 4 (430 × 932) |
+| --- | --- |
+| ![Čakalnica igralca 3](playwright-screenshots/02-lobby-player3-390x844.png) | ![Čakalnica igralca 4](playwright-screenshots/02-lobby-player4-430x932.png) |
+
+### Ključna stanja igre
+
+| Predvig ali udarec | Rufanje aduta | Licitacija |
+| --- | --- | --- |
+| ![Izbira predviga ali udarca](playwright-screenshots/03-cut-player3-390x844.png) | ![Rufanje aduta](playwright-screenshots/04-call-trump-player1-320x568.png) | ![Licitacija](playwright-screenshots/05-auction-player1-320x568.png) |
+
 ## Karte
 
 Moč: `J < Q < K < 10 < A`
