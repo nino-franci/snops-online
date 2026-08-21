@@ -20,15 +20,14 @@ let state = null;
 let selectedTalon = new Set();
 let deferredInstall = null;
 let seatSwapFrom = null;
-const savedFocusPreference = localStorage.getItem('snops-focus');
-let focusEnabled = savedFocusPreference === null ? true : savedFocusPreference === '1';
 let strictRulesChoice = true;
 let trickAnimationTimer = null;
 let previousTeamPenalties = null;
 let lastRoundDialogKey = null;
 let chatOpen = false;
 let unreadChatCount = 0;
-let previousChatCount = 0;
+let chatInitialized = false;
+let lastChatMessageId = null;
 
 const cardAssetUrls = ['J','Q','K','10','A'].flatMap((rank) =>
   ['C','D','H','S'].map((suit) => `/cards/${rank}${suit}.png`)
@@ -143,7 +142,7 @@ function phaseText() {
 function renderGameInfo() {
   const pills = [];
   if (state.phase === 'playing') {
-    if (!focusEnabled) pills.push(`Pravila <b>${state.strictRules ? 'stroga' : 'ohlapna'}</b>`);
+    pills.push(`Pravila <b>${state.strictRules ? 'stroga' : 'ohlapna'}</b>`);
     if (state.trumpSuit && ['normal','schnops','big_trump'].includes(state.contract)) pills.push(`Adut <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
     else pills.push('<b>Brez aduta</b>');
     const turnName = state.players[state.turnIndex]?.name || '';
@@ -443,15 +442,9 @@ function render() {
   if (!state) return;
   enterGame(state.code); $('#roomCode').textContent=state.code; $('#roundNo').textContent=state.roundNo;
   gameView.classList.toggle('lobby-view', state.phase === 'lobby');
-  gameView.classList.toggle('active-game-view', state.phase !== 'lobby');
-  // Focus mode is for card play, not for the lobby and setup controls.
-  const focusAvailable = state.playerCount === 4 && state.players.length === 4 && state.phase === 'playing';
-  const focusOn = focusAvailable && focusEnabled;
-  gameView.classList.toggle('focus-mode', focusOn);
-  document.body.classList.toggle('focus-active', focusOn);
-  const focusToggle = $('#focusToggle');
-  focusToggle.classList.toggle('hidden', !focusAvailable);
-  focusToggle.textContent = focusOn ? 'Izhod iz fokusa' : 'Fokus';
+  const gameActive = state.phase !== 'lobby';
+  gameView.classList.toggle('game-screen', gameActive);
+  document.body.classList.toggle('game-active', gameActive);
   gameView.classList.toggle('seating-mode', state.phase === 'lobby' && state.playerCount === 4 && state.players.length === 4);
   const [phase,title]=phaseText(); $('#phaseLabel').textContent=phase; $('#statusTitle').textContent=title;
   renderScoreboard(); renderGameInfo(); renderPlayersAround(); renderTrick(); renderTip(); renderActions(); renderHand(); renderLogs(); scheduleTrickAnimation();
@@ -477,14 +470,24 @@ $('#shareBtn').addEventListener('click',async()=>{
   try { if(navigator.share) await navigator.share({title:'Šnops Online',text,url}); else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Povezava je kopirana.'); } } catch(_){}
 });
 $('#chatForm').addEventListener('submit',(e)=>{ e.preventDefault(); const input=$('#chatInput'), text=input.value.trim(); if(!text)return; socket.emit('chat',{text}); input.value=''; });
-$('#focusToggle').addEventListener('click',()=>{ focusEnabled=!focusEnabled; localStorage.setItem('snops-focus', focusEnabled?'1':'0'); render(); });
 $('#menuToggle').addEventListener('click',()=>$('#gameDrawer').classList.remove('hidden'));
 $('#menuClose').addEventListener('click',()=>$('#gameDrawer').classList.add('hidden'));
-$('#chatToggle').addEventListener('click',()=>{
+function openChat() {
+  if (chatOpen) return;
   chatOpen = true; unreadChatCount = 0; $('#chatUnread').classList.add('hidden');
-  $('#chatPanel').classList.remove('hidden'); $('#chatInput').focus();
-});
-$('#chatClose').addEventListener('click',()=>{ chatOpen = false; $('#chatPanel').classList.add('hidden'); });
+  $('#chatPanel').classList.remove('hidden');
+  history.pushState({ ...(history.state || {}), snopsChat:true }, '');
+  setTimeout(() => $('#chatInput').focus(), 0);
+}
+function closeChat({ fromHistory = false } = {}) {
+  if (!chatOpen) return;
+  chatOpen = false; $('#chatPanel').classList.add('hidden');
+  if (!fromHistory && history.state?.snopsChat) history.back();
+}
+$('#chatToggle').addEventListener('click',openChat);
+$('#chatClose').addEventListener('click',()=>closeChat());
+window.addEventListener('popstate',()=>{ if (chatOpen) closeChat({ fromHistory:true }); });
+window.addEventListener('keydown',(event)=>{ if (event.key === 'Escape' && chatOpen) closeChat(); });
 $('#leaveRoomBtn').addEventListener('click',()=>$('#leaveDialog').classList.remove('hidden'));
 $('#leaveCancel').addEventListener('click',()=>$('#leaveDialog').classList.add('hidden'));
 $('#leaveConfirm').addEventListener('click',()=>{
@@ -494,12 +497,16 @@ $('#leaveConfirm').addEventListener('click',()=>{
 $('#roundDialogClose').addEventListener('click',()=>$('#roundDialog').classList.add('hidden'));
 
 socket.on('state',(next)=>{
-  if (!chatOpen && next.chat.length > previousChatCount) {
-    unreadChatCount += next.chat.length - previousChatCount;
+  if (chatInitialized && !chatOpen && next.chat.length) {
+    const previousIndex = next.chat.findIndex((message) => message.id === lastChatMessageId);
+    const newMessages = previousIndex >= 0 ? next.chat.slice(previousIndex + 1) : next.chat;
+    const myName = next.players[next.me]?.name;
+    unreadChatCount += newMessages.filter((message) => message.name !== myName).length;
     $('#chatUnread').textContent = unreadChatCount > 9 ? '9+' : unreadChatCount;
     $('#chatUnread').classList.toggle('hidden', unreadChatCount === 0);
   }
-  previousChatCount = next.chat.length;
+  lastChatMessageId = next.chat.at(-1)?.id || lastChatMessageId;
+  chatInitialized = true;
   state=next; if(state.phase!=='talon_exchange') selectedTalon.clear(); render();
 });
 socket.on('gameError',(message)=>toast(message));

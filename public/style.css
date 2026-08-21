@@ -246,22 +246,22 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .trick-cross .played .card { width:58px; }
 .table-center-mark { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:rgba(255,255,255,.18); font-weight:900; letter-spacing:.16em; text-transform:uppercase; }
 
-.focus-mode .room-strip,.focus-mode .scoreboard,.focus-mode .tabs-panel,.focus-mode .table-head { display:none; }
-.focus-active .site-footer { display:none; }
-.focus-mode main { padding-top:6px; }
-.focus-mode .table { min-height:calc(100dvh - 12px); border-radius:0; margin:0; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:transparent; box-shadow:none; border:none; }
-.focus-mode .game-info { justify-content:center; margin:2px 0 4px; position:sticky; top:4px; z-index:10; }
-.focus-mode .game-info .info-pill { background:rgba(8,25,18,.93); font-size:.82rem; padding:7px 10px; }
-.focus-mode .play-zone { min-height:48dvh; max-height:520px; }
-.focus-mode .action-area { margin:4px 0; }
-.focus-mode .action-box { padding:8px 10px; text-align:center; background:rgba(0,0,0,.10); }
-.focus-mode .action-box h3 { display:none; }
-.focus-mode .action-box p { margin:2px 0; font-size:.75rem; }
-.focus-mode .hand-area { margin-top:2px; }
-.focus-mode .hand-title { display:none; }
-.focus-mode .hand-scroll { justify-content:center; overflow:visible; gap:0; padding:8px 0 4px; }
-.focus-mode .hand-scroll .card { flex-basis:72px; width:72px; margin-left:-13px; }
-.focus-mode .hand-scroll .card:first-child { margin-left:0; }
+.game-screen .room-strip,.game-screen .scoreboard,.game-screen .tabs-panel,.game-screen .table-head { display:none; }
+.game-active .site-footer { display:none; }
+.game-screen main { padding-top:6px; }
+.game-screen .table { min-height:calc(100dvh - 12px); border-radius:0; margin:0; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:transparent; box-shadow:none; border:none; }
+.game-screen .game-info { justify-content:center; margin:2px 0 4px; position:sticky; top:4px; z-index:10; }
+.game-screen .game-info .info-pill { background:rgba(8,25,18,.93); font-size:.82rem; padding:7px 10px; }
+.game-screen .play-zone { min-height:48dvh; max-height:520px; }
+.game-screen .action-area { margin:4px 0; }
+.game-screen .action-box { padding:8px 10px; text-align:center; background:rgba(0,0,0,.10); }
+.game-screen .action-box h3 { display:none; }
+.game-screen .action-box p { margin:2px 0; font-size:.75rem; }
+.game-screen .hand-area { margin-top:2px; }
+.game-screen .hand-title { display:none; }
+.game-screen .hand-scroll { justify-content:center; overflow:visible; gap:0; padding:8px 0 4px; }
+.game-screen .hand-scroll .card { flex-basis:72px; width:72px; margin-left:-13px; }
+.game-screen .hand-scroll .card:first-child { margin-left:0; }
 
 @media (max-width: 420px) {
   .play-zone { min-height:330px; }
@@ -269,7 +269,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .table-seat { min-width:80px; max-width:105px; padding:6px; }
   .trick-area { inset:23% 19%; }
   .trick-cross .played .card { width:52px; }
-  .focus-mode .hand-scroll .card { flex-basis:66px; width:66px; margin-left:-15px; }
+  .game-screen .hand-scroll .card { flex-basis:66px; width:66px; margin-left:-15px; }
 }
 
 /* --- v4: vizualno razporejanje sedežev + Mali 7 sled kart --- */
@@ -316,20 +316,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .seat-editor-1 { left:84%; } .seat-editor-3 { left:16%; }
   .pair-summary { grid-template-columns:1fr; }
   .small-played .card { width:40px; }
-  .focus-mode .hand-scroll { max-width:100%; padding-inline:8px; }
-  .focus-mode .hand-scroll .card { flex-basis:min(20vw,72px); width:min(20vw,72px); margin-left:-11px; }
+  .game-screen .hand-scroll { max-width:100%; padding-inline:8px; }
+  .game-screen .hand-scroll .card { flex-basis:min(20vw,72px); width:min(20vw,72px); margin-left:-11px; }
 }
 
-/* --- v5: user-controlled focus + 20/40 table preview --- */
-.focus-toggle {
-  position: fixed; right: 10px; top: calc(10px + env(safe-area-inset-top)); z-index: 90;
-  padding: 8px 11px; border-radius: 999px; font-size: .76rem; font-weight: 900;
-  background: rgba(8,25,18,.94); color: var(--gold); border: 1px solid rgba(240,197,109,.45);
-  box-shadow: 0 8px 18px rgba(0,0,0,.28);
-}
-body.focus-active .topbar { display:none; }
-body.focus-active main { padding-top:0; }
-.focus-mode .focus-toggle { display:block; }
+/* --- v5: 20/40 table preview --- */
+body.game-active .topbar { display:none; }
+body.game-active main { padding-top:0; }
 
 .meld-pair-preview { position:relative; width:58px; height:calc(58px * 1.42); }
 .meld-pair-preview .meld-main,
@@ -346,7 +339,6 @@ body.focus-active main { padding-top:0; }
 @media (max-width:420px) {
   .meld-pair-preview { width:52px; height:calc(52px * 1.42); }
   .meld-pair-preview .meld-ghost { transform:translate(14px,-10px) rotate(7deg); }
-  .focus-toggle { right:7px; top:calc(7px + env(safe-area-inset-top)); padding:7px 9px; }
 }
 
 .small-help{font-size:.82rem;margin-top:-.3rem}.strict-choice{margin-bottom:.25rem}.strict-lobby{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:10px 0;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}.compact-seg{width:auto;min-width:130px}.compact-seg .seg{padding:.55rem .8rem}
@@ -357,8 +349,8 @@ body.focus-active main { padding-top:0; }
 .bot-note { text-align:center; font-size:.72rem; margin:8px 0 0; }
 
 /* --- Realistic mobile table and trick collection --- */
-body.focus-active,
-#gameView.focus-mode {
+body.game-active,
+#gameView.game-screen {
   background:
     linear-gradient(90deg, rgba(50,24,9,.96), rgba(91,49,21,.96) 12%, rgba(52,25,10,.96) 24%, rgba(98,53,23,.96) 42%, rgba(54,26,10,.96) 64%, rgba(91,47,19,.96));
 }
@@ -491,8 +483,8 @@ button:not(:disabled):active { transform:translateY(1px) scale(.985); }
 .tabs { padding:3px;border-radius:11px;background:#101916; }
 .tab { border-radius:9px; }
 .tab.active { background:#263631; }
-body.focus-active,#gameView.focus-mode { background:#09100e; }
-.focus-mode .table { background:transparent; }
+body.game-active,#gameView.game-screen { background:#09100e; }
+.game-screen .table { background:transparent; }
 @keyframes turn-breathe { 0%,100%{box-shadow:0 0 0 2px rgba(244,199,107,.1),0 8px 20px rgba(0,0,0,.24)} 50%{box-shadow:0 0 0 5px rgba(244,199,107,.18),0 8px 20px rgba(0,0,0,.24)} }
 @keyframes screen-enter { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 #homeView:not(.hidden),#gameView:not(.hidden) { animation:screen-enter .32s ease-out both; }
@@ -503,19 +495,19 @@ body.focus-active,#gameView.focus-mode { background:#09100e; }
 @media (prefers-reduced-motion:reduce) { #homeView:not(.hidden),#gameView:not(.hidden),.table-seat.turn{animation:none} }
 
 /* --- Full-viewport gameplay: the table, actions and hand never require page scrolling. --- */
-body.focus-active {
+body.game-active {
   width:100%; height:100dvh; min-height:100dvh; overflow:hidden;
   overscroll-behavior:none;
 }
-body.focus-active #app,
-body.focus-active main,
-#gameView.focus-mode {
+body.game-active #app,
+body.game-active main,
+#gameView.game-screen {
   width:100%; height:100dvh; min-height:0; max-width:none;
 }
-body.focus-active #app { padding:0; }
-body.focus-active main { padding:0; }
-#gameView.focus-mode { overflow:hidden; }
-#gameView.focus-mode .table {
+body.game-active #app { padding:0; }
+body.game-active main { padding:0; }
+#gameView.game-screen { overflow:hidden; }
+#gameView.game-screen .table {
   display:grid;
   grid-template-rows:auto minmax(0,1fr) auto auto auto;
   gap:4px;
@@ -523,42 +515,38 @@ body.focus-active main { padding:0; }
   padding:max(7px,env(safe-area-inset-top)) 8px max(7px,env(safe-area-inset-bottom));
   overflow:hidden;
 }
-#gameView.focus-mode .game-info {
+#gameView.game-screen .game-info {
   position:static; min-height:0; margin:0; padding-right:58px;
   justify-content:flex-start; overflow:hidden; flex-wrap:nowrap;
 }
-#gameView.focus-mode .game-info .info-pill {
+#gameView.game-screen .game-info .info-pill {
   flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   padding:5px 8px; font-size:.68rem;
 }
-#gameView.focus-mode .play-zone {
+#gameView.game-screen .play-zone {
   width:min(100%,760px); height:auto; min-height:0; max-height:none;
   margin:0 auto; align-self:stretch;
 }
-#gameView.focus-mode .game-tip { margin:0 auto; padding:4px 9px; font-size:.64rem; }
-#gameView.focus-mode .action-area { margin:0; }
-#gameView.focus-mode .action-box { padding:6px 9px; }
-#gameView.focus-mode .action-box p { margin:0; line-height:1.25; }
-#gameView.focus-mode .action-buttons { justify-content:center; }
-#gameView.focus-mode .action-buttons button { min-height:38px; padding:7px 10px; }
-#gameView.focus-mode .hand-area { min-height:0; margin:0; }
-#gameView.focus-mode .hand-scroll {
+#gameView.game-screen .game-tip { margin:0 auto; padding:4px 9px; font-size:.64rem; }
+#gameView.game-screen .action-area { margin:0; }
+#gameView.game-screen .action-box { padding:6px 9px; }
+#gameView.game-screen .action-box p { margin:0; line-height:1.25; }
+#gameView.game-screen .action-buttons { justify-content:center; }
+#gameView.game-screen .action-buttons button { min-height:38px; padding:7px 10px; }
+#gameView.game-screen .hand-area { min-height:0; margin:0; }
+#gameView.game-screen .hand-scroll {
   min-height:0; max-height:clamp(82px,18dvh,126px);
   padding:3px 4px 1px; align-items:flex-end;
 }
-#gameView.focus-mode .hand-scroll .card {
+#gameView.game-screen .hand-scroll .card {
   flex-basis:clamp(54px,18vw,78px); width:clamp(54px,18vw,78px);
   max-height:clamp(78px,18dvh,113px); margin-left:clamp(-16px,-3vw,-9px);
 }
-#gameView.focus-mode .focus-toggle {
-  top:max(6px,env(safe-area-inset-top)); right:6px;
-  padding:5px 8px; font-size:.66rem; opacity:.82;
-}
 @media (max-height:650px) {
-  #gameView.focus-mode .game-tip { display:none; }
-  #gameView.focus-mode .play-zone { border-width:3px; }
-  #gameView.focus-mode .table-seat { padding:4px 6px; }
-  #gameView.focus-mode .back-fan { margin-top:1px; }
+  #gameView.game-screen .game-tip { display:none; }
+  #gameView.game-screen .play-zone { border-width:3px; }
+  #gameView.game-screen .table-seat { padding:4px 6px; }
+  #gameView.game-screen .back-fan { margin-top:1px; }
 }
 
 /* --- Accessible game controls, private team pile and lightweight overlays. --- */
@@ -571,14 +559,13 @@ body.focus-active main { padding:0; }
   color:var(--text); background:rgba(12,25,21,.94); border:1px solid var(--line);
   box-shadow:0 8px 22px rgba(0,0,0,.28); backdrop-filter:blur(12px);
 }
-.game-tools .focus-toggle,#gameView.focus-mode .game-tools .focus-toggle { position:relative; inset:auto; z-index:auto; border-radius:14px; font-size:.76rem; }
 .tool-badge { position:absolute; right:-4px; top:-5px; min-width:18px; padding:2px 5px; border-radius:99px; background:#d95656; color:white; font-size:.65rem; }
 .active-game-view .scoreboard { position:relative; z-index:6; margin:0; border-radius:0; box-shadow:none; }
-#gameView.focus-mode .scoreboard { display:grid; position:absolute; top:0; left:50%; transform:translateX(-50%); width:min(100%,560px); z-index:8; padding:4px 58px 4px 6px; background:rgba(9,19,16,.9); }
-#gameView.focus-mode .score-card { padding:4px 8px; }
-#gameView.focus-mode .team-names { display:none; }
-#gameView.focus-mode .score-main { margin-top:1px; }
-#gameView.focus-mode .score-main strong { font-size:1rem; }
+#gameView.game-screen .scoreboard { display:grid; position:absolute; top:0; left:50%; transform:translateX(-50%); width:min(100%,560px); z-index:8; padding:4px 58px 4px 6px; background:rgba(9,19,16,.9); }
+#gameView.game-screen .score-card { padding:4px 8px; }
+#gameView.game-screen .team-names { display:none; }
+#gameView.game-screen .score-main { margin-top:1px; }
+#gameView.game-screen .score-main strong { font-size:1rem; }
 .score-gained { display:flex; align-items:baseline; gap:5px; animation:score-pop 1.4s ease both; }
 .score-gained em,.result-score em { color:var(--green); font-style:normal; font-weight:900; }
 @keyframes score-pop { 0%{transform:scale(.92)} 30%{transform:scale(1.13)} 100%{transform:scale(1)} }
@@ -613,12 +600,46 @@ body.focus-active main { padding:0; }
 .result-score { display:flex; align-items:baseline; gap:7px; margin-top:18px; padding:13px; border-radius:12px; background:rgba(255,255,255,.05); }
 .result-score strong { font-size:1.25rem; }
 .lobby-view .table { border-color:rgba(244,199,107,.2); }
-.lobby-view .game-tools #focusToggle { display:none!important; }
 @media (max-width:719px) {
-  #gameView.focus-mode .table { padding-top:50px; }
+  #gameView.game-screen .table { padding-top:50px; }
   .captured-pile.seat-left { left:1%; bottom:18%; }
   .captured-pile.seat-right { right:1%; top:18%; }
   .captured-pile > div:last-child { font-size:.6rem; }
   .pile-cards { width:28px; height:40px; }
 }
 @media (prefers-reduced-motion:reduce) { .score-gained { animation:none; } }
+
+/* --- Dedicated lobby and game screens. --- */
+.game-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:stretch; margin-bottom:10px; }
+.game-header .scoreboard { margin:0; }
+.game-tools { position:static; z-index:auto; display:flex; flex-direction:row; align-items:center; gap:7px; }
+.tool-button { min-width:46px; height:100%; min-height:46px; }
+#gameView.game-screen {
+  display:grid; grid-template-rows:auto minmax(0,1fr); width:100%; height:100dvh; overflow:hidden;
+}
+#gameView.game-screen .game-header {
+  position:relative; z-index:12; margin:0; padding:max(5px,env(safe-area-inset-top)) 7px 4px;
+  background:rgba(9,19,16,.96); border-bottom:1px solid var(--line);
+}
+#gameView.game-screen .scoreboard {
+  position:static; display:grid; width:auto; transform:none; padding:3px; background:transparent;
+}
+#gameView.game-screen .table {
+  width:100%; height:auto; min-height:0; padding:3px 8px max(7px,env(safe-area-inset-bottom));
+}
+#gameView.game-screen .room-strip,#gameView.game-screen .table-head { display:none; }
+.chat-panel {
+  inset:0; width:100%; max-width:none; height:100dvh; max-height:none; padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));
+  border:0; border-radius:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto;
+}
+.chat-head { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+.chat-head h2 { grid-column:2; justify-self:center; margin:0; font-size:1.05rem; }
+.chat-panel .chat-messages { min-height:0; max-height:none; padding:10px 2px; }
+.chat-panel .chat-form { margin:0; padding-top:10px; border-top:1px solid var(--line); }
+@media (max-width:420px) {
+  #gameView.game-screen .score-card { padding:3px 5px; }
+  #gameView.game-screen .score-name { font-size:.72rem; }
+  #gameView.game-screen .score-main strong { font-size:.92rem; }
+  .game-tools { gap:4px; }
+  .tool-button { min-width:42px; min-height:42px; padding:7px; }
+}
