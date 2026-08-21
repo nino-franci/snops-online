@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { createRoom, scheduleBot, startRound, queueTrickResolution, publicState, TRICK_REVIEW_MS, TRICK_COLLECT_MS } = require('../server');
+const { createRoom, scheduleBot, startRound, queueTrickResolution, publicState, publicRoomList, TRICK_REVIEW_MS, TRICK_COLLECT_MS } = require('../server');
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -87,6 +87,17 @@ function testRoundScorePrivacy() {
   assert.deepStrictEqual(state.teams.map((team) => team.penalty), [0, 0], 'match score remains public');
 }
 
+function testPublicRoomDiscovery() {
+  const publicRoom = createRoom({ id: 'public-host' }, { name:'Ana', playerCount:4, targetScore:25, strictRules:true, isPublic:true, token:'public-token' });
+  const privateRoom = createRoom({ id: 'private-host' }, { name:'Miha', playerCount:4, targetScore:25, strictRules:true, isPublic:false, token:'private-token' });
+  const rooms = publicRoomList();
+  assert.ok(rooms.some((room) => room.code === publicRoom.code && room.name === 'Soba igralca Ana'));
+  assert.ok(!rooms.some((room) => room.code === privateRoom.code), 'private rooms must not be discoverable');
+  const state = publicState(publicRoom, 'public-host');
+  assert.strictEqual(state.isPublic, true);
+  assert.deepStrictEqual(state.teams.map((team) => team.name), ['Ekipa 1', 'Ekipa 2']);
+}
+
 (async () => {
   await testBotsAdvanceFromCutPhase();
   console.log('PASS bots advance from cut phase');
@@ -94,6 +105,8 @@ function testRoundScorePrivacy() {
   console.log('PASS completed trick review and collection delay');
   testRoundScorePrivacy();
   console.log('PASS current-round team score remains private');
+  testPublicRoomDiscovery();
+  console.log('PASS public room discovery hides private rooms');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

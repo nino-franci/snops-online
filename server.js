@@ -51,6 +51,9 @@ const CONTRACTS = {
 function cleanName(name) {
   return String(name || '').trim().replace(/\s+/g, ' ').slice(0, 20) || 'Igralec';
 }
+function cleanTeamName(name, fallback) {
+  return String(name || '').trim().replace(/\s+/g, ' ').slice(0, 24) || fallback;
+}
 function makeCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -86,6 +89,7 @@ function teamOf(index) { return index % 2; }
 function teamMembers(team) { return team === 0 ? [0, 2] : [1, 3]; }
 function otherTeam(team) { return team === 0 ? 1 : 0; }
 function teamName(room, team) { return teamMembers(team).map((i) => room.players[i]?.name).filter(Boolean).join(' + '); }
+function teamLabel(room, team) { return room.teamNames?.[team] || `Ekipa ${team + 1}`; }
 
 function createRoom(hostSocket, payload) {
   const playerCount = Number(payload.playerCount) === 3 ? 3 : 4;
@@ -93,6 +97,7 @@ function createRoom(hostSocket, payload) {
   const token = payload.token || makeToken();
   const room = {
     code: makeCode(), hostToken: token, playerCount, targetScore, strictRules: payload.strictRules !== false,
+    isPublic: payload.isPublic === true, teamNames: ['Ekipa 1', 'Ekipa 2'],
     players: [{ name: cleanName(payload.name), token, socketId: hostSocket.id, connected: true, isBot: false }],
     phase: 'lobby', dealerIndex: Math.floor(Math.random() * playerCount), roundNo: 0,
     cutterIndex: null, callerIndex: null, dealMode: null, deck: [], hands: [], pendingSecond: [], talon: [],
@@ -107,6 +112,20 @@ function createRoom(hostSocket, payload) {
   log(room, `${room.players[0].name} je ustvaril sobo ${room.code}.`);
   return room;
 }
+
+function publicRoomList() {
+  return [...rooms.values()]
+    .filter((room) => {
+      const host = room.players.find((player) => player.token === room.hostToken);
+      return room.isPublic && room.phase === 'lobby' && host?.connected && room.players.length < room.playerCount;
+    })
+    .map((room) => {
+      const host = room.players.find((player) => player.token === room.hostToken);
+      return { code: room.code, name: `Soba igralca ${host?.name || 'Igralec'}`, players: room.players.length, capacity: room.playerCount };
+    });
+}
+
+function emitRoomList() { io.emit('roomList', publicRoomList()); }
 
 function startRound(room) {
   room.roundNo += 1;
@@ -353,7 +372,7 @@ function normalFinishByCount(room, countingTeam, countingPlayer = null) {
   const loserTrickCount = teamTricks(room, loserTeam);
   const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
   const counterName = Number.isInteger(countingPlayer) ? room.players[countingPlayer]?.name : null;
-  finishRound(room, countingTeam, loserTeam, amount, `${counterName || teamName(room, countingTeam)} je štel; ekipa ${countingTeam + 1} je imela ${score} točk, zato je zmagala.`);
+  finishRound(room, countingTeam, loserTeam, amount, `${counterName || teamName(room, countingTeam)} je štel; ${teamLabel(room, countingTeam)} je imela ${score} točk, zato je zmagala.`);
   return true;
 }
 
@@ -423,7 +442,7 @@ function resolveStandardTrick(room) {
     const loserScore = teamRoundScore(room, loserTeam);
     const loserTrickCount = teamTricks(room, loserTeam);
     const amount = loserTrickCount === 0 ? 3 : loserScore <= 32 ? 2 : 1;
-    return finishRound(room, winnerTeam, loserTeam, amount, `Vse karte so bile odigrane. Ekipa ${winnerTeam + 1} je zmagala z rezultatom ${t0}:${t1}; ekipa ${loserTeam + 1} je zbrala ${loserScore} točk in ${loserTrickCount} štihov, zato piše ${amount}.`);
+    return finishRound(room, winnerTeam, loserTeam, amount, `Vse karte so bile odigrane. ${teamLabel(room, winnerTeam)} je zmagala z rezultatom ${t0}:${t1}; ${teamLabel(room, loserTeam)} je zbrala ${loserScore} točk in ${loserTrickCount} štihov, zato piše ${amount}.`);
   }
 }
 
@@ -626,7 +645,7 @@ function publicState(room, socketId) {
   const canClose = four && room.phase === 'playing' && room.contract === 'schnops' && me === room.bidderIndex && room.trick.length === 0 && room.trickNo > 0;
 
   return {
-    code: room.code, playerCount: room.playerCount, targetScore: room.targetScore, strictRules: room.strictRules, phase: room.phase, roundNo: room.roundNo,
+    code: room.code, playerCount: room.playerCount, targetScore: room.targetScore, strictRules: room.strictRules, isPublic: room.isPublic, phase: room.phase, roundNo: room.roundNo,
     dealerIndex: room.dealerIndex, cutterIndex: room.cutterIndex, callerIndex: room.callerIndex, dealMode: room.dealMode,
     trumpSuit: room.trumpSuit, contract: room.contract, bidderIndex: room.bidderIndex, multiplier: room.multiplier,
     auction: room.auction ? { currentIndex: room.auction.currentIndex, best: room.auction.best, passesSinceBid: room.auction.passesSinceBid } : null,
@@ -638,8 +657,8 @@ function publicState(room, socketId) {
       tricks: !four || teamOf(i) === myTeam ? room.trickCounts[i] || 0 : null
     })),
     teams: four ? [
-      { index: 0, members: [0,2], penalty: room.teamPenalty[0] },
-      { index: 1, members: [1,3], penalty: room.teamPenalty[1] }
+      { index: 0, name: room.teamNames?.[0] || 'Ekipa 1', members: [0,2], penalty: room.teamPenalty[0] },
+      { index: 1, name: room.teamNames?.[1] || 'Ekipa 2', members: [1,3], penalty: room.teamPenalty[1] }
     ] : null,
     myTeamRoundPoints: myTeamScore, myTeamCapturedCount,
     myTeamPileOwner: four && myTeam !== null ? room.teamPileOwner[myTeam] : null,
@@ -648,7 +667,7 @@ function publicState(room, socketId) {
     talonCount: room.talon.length, myTalon: room.playerCount === 3 && room.phase === 'talon_exchange' && me === room.callerIndex ? room.talon : [],
     trick: room.trick, smallHistory: room.smallHistory || [], meldDisplay: room.meldDisplay, trickLeader: room.trickLeader, turnIndex: room.turnIndex, trickNo: room.trickNo,
     trickWinner: room.trickWinner, trickCollectAt: room.trickCollectAt,
-    melds: room.melds, roundResult: room.roundResult, log: room.log.slice(-25), chat: room.chat.slice(-30), contracts: CONTRACTS
+    melds: room.melds, roundResult: room.roundResult, chat: room.chat.slice(-30), contracts: CONTRACTS
   };
 }
 
@@ -660,9 +679,12 @@ function roomForSocket(socket) {
 }
 
 io.on('connection', (socket) => {
+  socket.emit('roomList', publicRoomList());
+  socket.on('getRoomList', (ack = () => {}) => ack(publicRoomList()));
+
   socket.on('createRoom', (payload = {}, ack = () => {}) => {
     const room = createRoom(socket, payload); socket.join(room.code);
-    ack({ ok: true, code: room.code, token: room.players[0].token }); emitRoom(room);
+    ack({ ok: true, code: room.code, token: room.players[0].token }); emitRoom(room); emitRoomList();
   });
 
   socket.on('joinRoom', (payload = {}, ack = () => {}) => {
@@ -673,7 +695,7 @@ io.on('connection', (socket) => {
     let player = room.players.find((p) => p.token === token);
     if (player) {
       player.socketId = socket.id; player.connected = true; player.name = cleanName(payload.name || player.name); socket.join(code);
-      ack({ ok: true, code, token }); log(room, `${player.name} se je ponovno povezal.`); return emitRoom(room);
+      ack({ ok: true, code, token }); log(room, `${player.name} se je ponovno povezal.`); emitRoom(room); emitRoomList(); return;
     }
     if (room.phase !== 'lobby') return ack({ ok: false, error: 'Igra se je že začela. Za ponovni vstop uporabi isti telefon/brskalnik.' });
     if (room.players.length >= room.playerCount && !(room.phase === 'lobby' && room.players.some((p) => p.isBot))) return ack({ ok: false, error: 'Soba je polna.' });
@@ -681,7 +703,7 @@ io.on('connection', (socket) => {
     const botIndex = room.phase === 'lobby' ? room.players.findIndex((p) => p.isBot) : -1;
     player = { name: cleanName(payload.name), token, socketId: socket.id, connected: true, isBot: false };
     if (botIndex >= 0) room.players[botIndex] = player;
-    else room.players.push(player); socket.join(code); ack({ ok: true, code, token }); log(room, `${player.name} se je pridružil.`); emitRoom(room);
+    else room.players.push(player); socket.join(code); ack({ ok: true, code, token }); log(room, `${player.name} se je pridružil.`); emitRoom(room); emitRoomList();
   });
 
 
@@ -692,7 +714,7 @@ io.on('connection', (socket) => {
     if (room.players.length >= room.playerCount) return emitError(socket, 'Vsi sedeži so že zasedeni.');
     let n = 1; while (room.players.some(p => p.name === `Bot ${n}`)) n++;
     room.players.push({ name:`Bot ${n}`, token:`bot-${makeToken()}`, socketId:null, connected:true, isBot:true });
-    log(room, `Dodani je Bot ${n}. Bot vedno igra po strogih pravilih.`); emitRoom(room);
+    log(room, `Dodani je Bot ${n}. Bot vedno igra po strogih pravilih.`); emitRoom(room); emitRoomList();
   });
 
   socket.on('removeBot', ({ playerIndex } = {}) => {
@@ -701,7 +723,18 @@ io.on('connection', (socket) => {
     if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko odstranjuje bote.');
     const i = Number(playerIndex);
     if (!Number.isInteger(i) || !room.players[i]?.isBot) return emitError(socket, 'Ta sedež ni bot.');
-    const name = room.players[i].name; room.players.splice(i,1); log(room, `${name} je odstranjen.`); emitRoom(room);
+    const name = room.players[i].name; room.players.splice(i,1); log(room, `${name} je odstranjen.`); emitRoom(room); emitRoomList();
+  });
+
+  socket.on('setLobbySettings', ({ targetScore, strictRules, teamNames, isPublic } = {}) => {
+    const room = roomForSocket(socket); if (!room || room.phase !== 'lobby') return;
+    const { player } = playerBySocket(room, socket.id);
+    if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko spreminja nastavitve sobe.');
+    if (targetScore !== undefined) room.targetScore = Math.max(7, Math.min(99, Number(targetScore) || 25));
+    if (strictRules !== undefined) room.strictRules = Boolean(strictRules);
+    if (Array.isArray(teamNames)) room.teamNames = [cleanTeamName(teamNames[0], 'Ekipa 1'), cleanTeamName(teamNames[1], 'Ekipa 2')];
+    if (isPublic !== undefined) room.isPublic = Boolean(isPublic);
+    log(room, 'Gostitelj je posodobil nastavitve sobe.'); emitRoom(room); emitRoomList();
   });
 
   socket.on('setStrictRules', ({ enabled } = {}) => {
@@ -731,7 +764,7 @@ io.on('connection', (socket) => {
     if (!player || player.token !== room.hostToken) return emitError(socket, 'Samo gostitelj lahko začne.');
     if (room.players.length !== room.playerCount) return emitError(socket, `Potrebujete ${room.playerCount} igralce.`);
     if (room.phase !== 'lobby') return;
-    startRound(room); emitRoom(room);
+    startRound(room); emitRoom(room); emitRoomList();
   });
 
   socket.on('chooseCut', ({ mode } = {}) => {
@@ -892,7 +925,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     for (const room of rooms.values()) {
       const player = room.players.find((p) => p.socketId === socket.id); if (!player) continue;
-      player.connected = false; player.socketId = null; log(room, `${player.name} je izgubil povezavo - lahko se vrne z istim telefonom.`); emitRoom(room); break;
+      player.connected = false; player.socketId = null; log(room, `${player.name} je izgubil povezavo - lahko se vrne z istim telefonom.`); emitRoom(room); emitRoomList(); break;
     }
   });
 });
@@ -908,5 +941,6 @@ module.exports = {
   queueTrickResolution,
   TRICK_REVIEW_MS,
   TRICK_COLLECT_MS,
-  publicState
+  publicState,
+  publicRoomList
 };
