@@ -520,6 +520,14 @@ $('#joinBtn').addEventListener('click',()=>{
   joinRoom(roomCodeInput.value);
 });
 roomCodeInput.addEventListener('input',()=>roomCodeInput.value=roomCodeInput.value.toUpperCase().replace(/[^A-Z2-9]/g,'').slice(0,5));
+function keepFocusedControlVisible() {
+  const active = document.activeElement;
+  if (!active?.matches('input, textarea, select')) return;
+  requestAnimationFrame(() => active.scrollIntoView({ block:'center', inline:'nearest' }));
+}
+window.addEventListener('resize', keepFocusedControlVisible);
+window.visualViewport?.addEventListener('resize', keepFocusedControlVisible);
+document.addEventListener('focusin', keepFocusedControlVisible);
 $('#shareBtn').addEventListener('click',async()=>{
   const url=`${location.origin}${location.pathname}?room=${encodeURIComponent(state.code)}`; const text=`Pridruži se naši igri Šnops Online. Koda: ${state.code}`;
   try { if(navigator.share) await navigator.share({title:'Šnops Online',text,url}); else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Povezava je kopirana.'); } } catch(_){}
