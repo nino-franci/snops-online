@@ -34,7 +34,7 @@
           <div class="landing-actions">
             <section class="landing-action">
               <div><h3>Nova soba</h3><p>Nastavitve igre urediš v čakalnici.</p></div>
-              <div class="segmented room-visibility" aria-label="Vidnost nove sobe"><button type="button" class="seg active" data-room-public="0">Zasebna</button><button type="button" class="seg" data-room-public="1">Javna</button></div>
+              <div class="segmented room-visibility" role="group" aria-label="Vidnost nove sobe"><button type="button" class="seg active" data-room-public="0" aria-pressed="true">Zasebna</button><button type="button" class="seg" data-room-public="1" aria-pressed="false">Javna</button></div>
               <button id="createBtn" class="primary big">Ustvari sobo</button>
             </section>
             <section class="room-browser" aria-live="polite"><div class="room-browser-head"><h3>Odprte sobe</h3><button id="refreshRoomsBtn" type="button" class="ghost">Osveži</button></div><div id="publicRoomList" class="public-room-list"><p class="muted">Iščem odprte sobe …</p></div></section>
@@ -46,7 +46,7 @@
               <button id="joinBtn" class="secondary big">Vstopi v sobo</button>
             </section>
           </div>
-          <p id="homeError" class="error"></p>
+          <p id="homeError" class="error" role="alert" aria-live="assertive"></p>
         </div>
       </section>
 
@@ -56,7 +56,7 @@
           <nav class="game-tools" aria-label="Igralne možnosti">
             <button id="chatToggle" class="tool-button" type="button" aria-label="Odpri klepet">💬<span id="chatUnread" class="tool-badge hidden">0</span></button>
             <button id="rulesToggle" class="tool-button" type="button" aria-label="Odpri pravila">?</button>
-            <button id="leaveRoomBtn" class="tool-button leave-tool" type="button" aria-label="Zapusti sobo">↪</button>
+            <button id="leaveRoomBtn" class="tool-button leave-tool" type="button" aria-label="Zapusti sobo"><svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4M18 12H9" /></svg></button>
           </nav>
         </header>
         <div class="room-strip panel compact">
@@ -65,8 +65,9 @@
             <strong id="roomCode">-----</strong>
           </div>
           <button id="shareBtn" class="ghost">Deli kodo</button>
-          <div id="connectionBadge" class="status online">online</div>
+          <div id="connectionBadge" class="status online" role="status" aria-live="polite">online</div>
         </div>
+        <div id="connectionAlert" class="connection-alert hidden" role="status" aria-live="assertive"><strong>Povezava je prekinjena.</strong><span>Ponovno povezujem …</span></div>
 
         <section class="table panel">
           <div class="table-head">
@@ -126,7 +127,7 @@
       <span>Avtor: Nino Franci</span>
     </footer>
 
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="leaveDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
       <section class="modal-card"><h2 id="leaveTitle">Zapusti sobo?</h2><p>Ali res želiš zapustiti trenutno sobo?</p><div class="modal-actions"><button id="leaveCancel" class="ghost">Ostani</button><button id="leaveConfirm" class="danger">Zapusti sobo</button></div></section>
     </div>
