@@ -337,6 +337,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* --- Public room browser and simplified single-table lobby. --- */
 .room-visibility { margin:12px 0 0; }
+.landing-mode-switch { display:none; }
+.invitation-notice { display:grid; grid-template-columns:1fr auto; gap:3px 12px; margin-bottom:16px; padding:13px 14px; border:1px solid rgba(244,199,107,.35); border-radius:14px; background:rgba(244,199,107,.08); }
+.invitation-notice span,.invitation-notice small { color:var(--muted); }
+.invitation-notice strong { grid-row:1/3; grid-column:2; align-self:center; color:var(--gold); font:900 1.2rem ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.12em; }
 .room-browser { padding-top:16px; border-top:1px solid var(--line); }
 .room-browser-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
 .room-browser-head h3 { margin:0; }
@@ -354,6 +358,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .table-seat { color:var(--text); }
 .lobby-view .table-seat.picked,.lobby-view .table-seat.drag-over { border-color:var(--gold); box-shadow:0 0 0 4px rgba(244,199,107,.18),0 8px 18px rgba(0,0,0,.3); }
 .lobby-seat-help { text-align:center; font-size:.78rem; }
+.lobby-step { display:flex; align-items:flex-start; gap:10px; }
+.lobby-step h3,.lobby-start h3 { margin:0; }
+.lobby-step h3 small { margin-left:5px; color:var(--muted); font-size:.72rem; }
+.lobby-step-no { display:inline-grid; place-items:center; flex:0 0 25px; width:25px; height:25px; border-radius:50%; color:#20271f; background:var(--gold); font-size:.75rem; font-weight:950; }
 .lobby-settings { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; padding:14px; border:1px solid var(--line); border-radius:14px; background:rgba(0,0,0,.12); }
 .lobby-settings h3 { grid-column:1/-1; }
 .lobby-settings label { margin:0; }
@@ -361,10 +369,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .lobby-settings .setting-row { display:flex; align-items:center; justify-content:space-between; gap:8px; grid-column:1/-1; }
 .lobby-settings .segmented { margin:0; }
 #saveLobbySettings { grid-column:1/-1; min-height:42px; }
+.lobby-start { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.context-rule { margin-top:7px; padding:5px 8px; color:var(--muted); background:transparent; border:0; font-size:.72rem; text-decoration:underline; text-underline-offset:3px; }
 .guest-settings { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
 .guest-settings span { padding:6px 8px; border-radius:9px; background:rgba(255,255,255,.05); color:var(--muted); font-size:.72rem; }
 .rules-panel { position:fixed; inset:0; z-index:48; display:grid; grid-template-rows:auto minmax(0,1fr); padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); overflow:hidden; background:#121f1b; }
 .rules-panel .rules-copy { overflow:auto; padding:14px 4px 30px; }
+.rules-search-label { margin-top:16px; }
+#rulesSearch { position:sticky; top:0; z-index:2; margin-bottom:12px; background:#0e1715; }
+#rulesList { display:grid; gap:8px; }
+#rulesList details { scroll-margin-top:72px; padding:12px 13px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.035); }
+#rulesList summary { cursor:pointer; color:var(--text); font-weight:850; }
+#rulesList details[open] summary { color:var(--gold); }
+#rulesList p { margin:10px 0 0; }
 .leave-tool { color:#ffb4ae; }
 .editable-score { cursor:pointer; }
 .modal-backdrop { z-index:120; }
@@ -398,6 +415,12 @@ body:not(.game-active) #homeView:not(.hidden) { animation:landing-enter .48s cub
 @keyframes landing-enter { from{opacity:0;transform:translateY(10px) scale(.99)} to{opacity:1;transform:none} }
 @media (min-width:720px) { #homeView.home-grid { grid-template-columns:1.05fr .95fr; } #homeView .hero-card { min-height:620px; } #homeView .form-card { border-left:1px solid var(--line); border-top:0; } }
 @media (max-width:719px) { #homeView.home-grid { min-height:0; } #homeView .hero-card { min-height:285px; } .hero-cards { margin-top:26px; height:70px; } .hero-cards img { width:52px; } }
+@media (max-width:719px) {
+  .landing-mode-switch { display:grid; margin:18px 0 2px; }
+  [data-landing-panel].mobile-panel-hidden { display:none; }
+  #homeView .landing-actions { margin-top:12px; }
+  #homeView .room-browser { padding-top:0; border-top:0; }
+}
 @media (prefers-reduced-motion:reduce) { body:not(.game-active) #homeView:not(.hidden) { animation:none; } }
 
 /* --- v5: 20/40 table preview --- */
@@ -679,6 +702,14 @@ body.game-active main { padding:0; }
 .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
 .result-score { display:flex; align-items:baseline; gap:7px; margin-top:18px; padding:13px; border-radius:12px; background:rgba(255,255,255,.05); }
 .result-score strong { font-size:1.25rem; }
+.round-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:16px; }
+.round-summary div { display:grid; gap:4px; min-width:0; padding:10px; border-radius:11px; background:rgba(255,255,255,.05); }
+.round-summary span { color:var(--muted); font-size:.68rem; }
+.round-summary strong { overflow:hidden; text-overflow:ellipsis; font-size:.85rem; }
+.round-reason { margin-top:12px; padding:10px 12px; border:1px solid var(--line); border-radius:11px; color:var(--muted); }
+.round-reason summary { cursor:pointer; color:var(--text); font-weight:800; }
+.round-reason p { margin:9px 0 0; line-height:1.45; }
+@media (max-width:390px) { .round-summary { grid-template-columns:1fr; } }
 .lobby-view .table { border-color:rgba(244,199,107,.2); }
 @media (max-width:719px) {
   #gameView.game-screen .table { padding-top:50px; }

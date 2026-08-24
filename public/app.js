@@ -29,13 +29,31 @@ let chatInitialized = false;
 let lastChatMessageId = null;
 let newRoomPublic = false;
 let publicRooms = [];
+const invitedRoomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() || '';
 
 const cardAssetUrls = ['J','Q','K','10','A'].flatMap((rank) =>
   ['C','D','H','S'].map((suit) => `/cards/${rank}${suit}.png`)
 );
 
 nameInput.value = localStorage.getItem('snops-name') || '';
-roomCodeInput.value = new URLSearchParams(location.search).get('room') || '';
+roomCodeInput.value = invitedRoomCode;
+
+function setLandingMode(mode) {
+  $$('[data-landing-mode]').forEach((button) => {
+    const selected = button.dataset.landingMode === mode;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', selected);
+  });
+  $$('[data-landing-panel]').forEach((panel) => panel.classList.toggle('mobile-panel-hidden', panel.dataset.landingPanel !== mode));
+}
+
+if (invitedRoomCode.length === 5) {
+  $('#invitationCode').textContent = invitedRoomCode;
+  $('#invitationNotice').classList.remove('hidden');
+  $('#joinBtn').textContent = `Vstopi v sobo ${invitedRoomCode}`;
+  setLandingMode('join');
+  setTimeout(() => nameInput.focus(), 0);
+} else setLandingMode('create');
 
 function preloadCardAssets() {
   for (const url of cardAssetUrls) {
@@ -288,28 +306,29 @@ function scheduleTrickAnimation() {
 function renderLobbyActions() {
   const me = state.players[state.me];
   const full = state.players.length === state.playerCount;
-  return `<div class="action-box lobby-action"><h3>${state.players.length}/${state.playerCount} igralcev</h3>
-    ${full ? '<p class="ready-note">Vsi ste za mizo.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}
+  return `<div class="action-box lobby-action"><section class="lobby-step"><span class="lobby-step-no">1</span><div><h3>Igralci <small>${state.players.length}/${state.playerCount}</small></h3>
+    ${full ? '<p class="ready-note">Vsi ste za mizo.</p>' : '<p class="muted">Čakamo še ostale igralce.</p>'}</div></section>
     ${me?.isHost ? `<p class="muted lobby-seat-help">Tapni dva igralca na mizi ali ju povleci, da zamenjaš sedeža.</p>
       <div class="bot-manager">${state.players.length < state.playerCount ? '<button type="button" class="secondary" id="addBotBtn">🤖 Dodaj bota</button>' : ''}${state.players.filter(p=>p.isBot).map(p=>`<button type="button" class="ghost bot-remove" data-remove-bot="${p.index}">Odstrani ${safe(p.name)}</button>`).join('')}</div>
-      <section class="lobby-settings"><h3>Nastavitve</h3>
+      <section class="lobby-settings"><h3><span class="lobby-step-no">2</span> Nastavitve</h3>
         <label>Ime ekipe 1<input id="teamName0" maxlength="24" value="${safe(state.teams[0].name)}" /></label>
         <label>Ime ekipe 2<input id="teamName1" maxlength="24" value="${safe(state.teams[1].name)}" /></label>
         <label>Igra do<input id="lobbyTargetScore" type="number" min="7" max="99" value="${state.targetScore}" /></label>
         <div class="setting-row"><span id="strictSettingLabel">Stroga pravila</span><div class="segmented compact-seg" role="group" aria-labelledby="strictSettingLabel"><button type="button" class="seg ${state.strictRules?'active':''}" data-setting-strict="1" aria-pressed="${state.strictRules}">DA</button><button type="button" class="seg ${!state.strictRules?'active':''}" data-setting-strict="0" aria-pressed="${!state.strictRules}">NE</button></div></div>
         <div class="setting-row"><span id="publicSettingLabel">Vidnost sobe</span><div class="segmented compact-seg" role="group" aria-labelledby="publicSettingLabel"><button type="button" class="seg ${!state.isPublic?'active':''}" data-setting-public="0" aria-pressed="${!state.isPublic}">Zasebna</button><button type="button" class="seg ${state.isPublic?'active':''}" data-setting-public="1" aria-pressed="${state.isPublic}">Javna</button></div></div>
         <button id="saveLobbySettings" class="secondary">Shrani nastavitve</button>
-      </section><button id="startBtn" class="primary big" ${full?'':'disabled aria-describedby="startReason"'}>Začni igro</button>${full ? '' : `<p id="startReason" class="start-reason">Za začetek ${state.playerCount - state.players.length === 1 ? 'manjka še 1 igralec' : `manjkajo še ${state.playerCount - state.players.length} igralci`}. Povabi jih ali dodaj bota.</p>`}` : `<p class="muted">Gostitelj razporedi ekipe in uredi nastavitve.</p><div class="guest-settings"><span>${safe(state.teams[0].name)}</span><span>${safe(state.teams[1].name)}</span><span>Igra do ${state.targetScore}</span><span>Stroga pravila: ${state.strictRules?'DA':'NE'}</span></div>`}
+      </section><section class="lobby-start"><h3><span class="lobby-step-no">3</span> Začetek</h3><button id="startBtn" class="primary big" ${full?'':'disabled aria-describedby="startReason"'}>Začni igro</button>${full ? '<p class="ready-note">Sedeži in nastavitve so pripravljeni.</p>' : `<p id="startReason" class="start-reason">Za začetek ${state.playerCount - state.players.length === 1 ? 'manjka še 1 igralec' : `manjkajo še ${state.playerCount - state.players.length} igralci`}. Povabi jih ali dodaj bota.</p>`}</section>` : `<p class="muted">Gostitelj razporedi ekipe in uredi nastavitve.</p><div class="guest-settings"><span>${safe(state.teams[0].name)}</span><span>${safe(state.teams[1].name)}</span><span>Igra do ${state.targetScore}</span><span>Stroga pravila: ${state.strictRules?'DA':'NE'}</span></div>`}
   </div>`;
 }
 
 function renderCutActions() {
   if (state.me !== state.cutterIndex) return `<div class="action-box"><p class="muted">${safe(state.players[state.cutterIndex].name)} izbira predvig ali udarec.</p></div>`;
-  return `<div class="action-box"><h3>Predvig ali udarec?</h3><p class="muted">To izbira igralec desno od delivca. Predvig: igralec levo od delivca najprej dobi 3 in rufa, po 3 kartah za vse sledi se 2-2-2-2. Udarec: igralec levo od delivca dobi 3, rufa, nato se 2; ostali dobijo po 5.</p><div class="action-buttons"><button class="primary" data-cut="cut">Predvig</button><button class="secondary" data-cut="knock">Udari po kartah</button></div></div>`;
+  return `<div class="action-box"><h3>Predvig ali udarec?</h3><p class="muted">Izberi način deljenja.</p><div class="action-buttons"><button class="primary" data-cut="cut">Predvig</button><button class="secondary" data-cut="knock">Udari po kartah</button></div>${ruleHelp('dealing','Kako poteka deljenje?')}</div>`;
 }
+function ruleHelp(topic, label='Poglej pravilo') { return `<button type="button" class="context-rule" data-rule-topic="${topic}">? ${label}</button>`; }
 function renderCallActions() {
   if (state.me !== state.callerIndex) return `<div class="action-box"><p class="muted">Počakaj, da ${safe(state.players[state.callerIndex].name)} rufa aduta.</p></div>`;
-  return `<div class="action-box"><h3>Rufaj aduta</h3><p class="muted">Lahko izbereš katerokoli barvo, tudi če jo že imaš v roki.</p><div class="action-buttons">${Object.keys(suitSymbol).map((s) => `<button class="secondary suit-btn" data-call-suit="${s}">${suitSymbol[s]} ${safe(suitName[s])}</button>`).join('')}</div></div>`;
+  return `<div class="action-box"><h3>Rufaj aduta</h3><p class="muted">Izberi katerokoli barvo.</p><div class="action-buttons">${Object.keys(suitSymbol).map((s) => `<button class="secondary suit-btn" data-call-suit="${s}">${suitSymbol[s]} ${safe(suitName[s])}</button>`).join('')}</div>${ruleHelp('dealing','Kaj pomeni rufanje?')}</div>`;
 }
 function renderTrumpActions() {
   if (state.me !== state.callerIndex) return `<div class="action-box"><p class="muted">Počakaj na izbiro aduta.</p></div>`;
@@ -326,7 +345,7 @@ function renderAuctionActions() {
   const order = ['schnops','small','big','big_trump','eighteen','twentyfour'];
   return `<div class="action-box"><h3>Licitacija</h3><p class="muted">Trenutno: <b>${safe(bestText)}</b></p>
     ${mine ? `<div class="contract-grid">${order.map((key) => { const c=state.contracts[key]; const disabled=best && c.value<=best.value; return `<button class="contract-btn" data-bid="${key}" ${disabled?'disabled':''}>${safe(c.label)}<br><small>${c.value}</small></button>`; }).join('')}<button class="contract-btn pass" data-bid="pass">Dalje</button></div>` : `<p class="muted">Na vrsti je ${safe(state.players[state.auction.currentIndex].name)}.</p>`}
-  </div>`;
+    ${ruleHelp('auction','Kako deluje licitacija?')}</div>`;
 }
 function contraLabel() {
   if (!state.contra) return '';
@@ -338,7 +357,7 @@ function renderContraActions() {
   const mine = state.myTeam === state.contra.actionTeam;
   const alreadyPassed = state.contra.passed.includes(state.me);
   if (!mine) return `<div class="action-box"><h3>Pred prvo karto</h3><p class="muted">Druga ekipa se odloča. Trenutno ×${state.multiplier}.</p></div>`;
-  return `<div class="action-box"><h3>${contraLabel()}</h3><p class="muted">Kontra je možna samo pred prvo odigrano karto.</p><div class="action-buttons"><button class="primary" data-contra="raise" ${alreadyPassed?'disabled':''}>${contraLabel()}</button><button class="ghost" data-contra="pass" ${alreadyPassed?'disabled':''}>Brez / dalje</button></div>${alreadyPassed?'<p class="muted">Čakamo partnerja.</p>':''}</div>`;
+  return `<div class="action-box"><h3>${contraLabel()}</h3><p class="muted">Odloči se pred prvo karto.</p><div class="action-buttons"><button class="primary" data-contra="raise" ${alreadyPassed?'disabled':''}>${contraLabel()}</button><button class="ghost" data-contra="pass" ${alreadyPassed?'disabled':''}>Brez / dalje</button></div>${alreadyPassed?'<p class="muted">Čakamo partnerja.</p>':''}${ruleHelp('contra','Kaj pomenijo množitelji?')}</div>`;
 }
 function renderPlayActions() {
   const melds = state.eligibleMelds || [];
@@ -369,8 +388,12 @@ function renderRoundDialog() {
   lastRoundDialogKey = key;
   const winnerNames = r.winners.map((i) => state.players[i]?.name).filter(Boolean).join(' in ');
   $('#roundResultTitle').textContent = `Zmagala je ${state.teams[r.winnerTeam].name}`;
-  const multiplierText = r.multiplier > 1 ? `<p class="muted">Vrednost: ${r.baseAmount} × ${r.multiplier} = ${r.amount}.</p>` : '';
-  $('#roundResultBody').innerHTML = `<p><b>${safe(winnerNames)}</b></p><p>${safe(r.reason)}</p>${multiplierText}<div class="result-score">${safe(state.teams[r.loserTeam].name)}: <span>${state.teams[r.loserTeam].penalty - r.amount}</span><em>+${r.amount}</em><strong>→ ${state.teams[r.loserTeam].penalty}</strong></div>`;
+  const contractLabel = state.contracts[r.contract]?.label || 'Navadna igra';
+  $('#roundResultBody').innerHTML = `<div class="round-summary"><div><span>Zmagovalci</span><strong>${safe(winnerNames)}</strong></div><div><span>Igra</span><strong>${safe(contractLabel)}</strong></div><div><span>Vrednost</span><strong>${r.baseAmount}${r.multiplier > 1 ? ` × ${r.multiplier} = ${r.amount}` : ''}</strong></div></div><details class="round-reason"><summary>Zakaj se je runda končala?</summary><p>${safe(r.reason)}</p></details><div class="result-score"><span>${safe(state.teams[r.loserTeam].name)} piše</span><b>${state.teams[r.loserTeam].penalty - r.amount}</b><em>+${r.amount}</em><strong>→ ${state.teams[r.loserTeam].penalty}</strong></div>`;
+  const closeButton = $('#roundDialogClose');
+  const canContinue = state.phase === 'round_end' && state.players[state.me]?.isHost;
+  closeButton.textContent = canContinue ? 'Naslednja runda' : state.phase === 'match_end' ? 'Zaključi' : 'V redu';
+  closeButton.dataset.action = canContinue ? 'next-round' : 'close';
   $('#roundDialog').classList.remove('hidden');
 }
 function renderEndActions() {
@@ -433,6 +456,7 @@ function renderActions() {
   $('#skipTalonBtn')?.addEventListener('click', () => socket.emit('exchangeTalon', { cardIds:[] }));
   $$('[data-bid]').forEach((b) => b.addEventListener('click', () => socket.emit('bid', { contract:b.dataset.bid })));
   $$('[data-contra]').forEach((b) => b.addEventListener('click', () => socket.emit('contraAction', { action:b.dataset.contra })));
+  $$('[data-rule-topic]').forEach((b) => b.addEventListener('click', () => openRules(b.dataset.ruleTopic)));
   $$('[data-meld-card]').forEach((b) => b.addEventListener('click', () => socket.emit('playMeld', { cardId:b.dataset.meldCard })));
   $('#countBtn')?.addEventListener('click', () => socket.emit('countPoints'));
   $('#closeBtn')?.addEventListener('click', () => socket.emit('closeSchnops'));
@@ -485,6 +509,7 @@ function renderPublicRooms(rooms) {
   $$('[data-public-room]').forEach((button) => button.addEventListener('click', () => joinRoom(button.dataset.publicRoom)));
 }
 $$('[data-room-public]').forEach((button) => button.addEventListener('click', () => { newRoomPublic = button.dataset.roomPublic === '1'; $$('[data-room-public]').forEach((item) => { const selected = item === button; item.classList.toggle('active', selected); item.setAttribute('aria-pressed', selected); }); }));
+$$('[data-landing-mode]').forEach((button) => button.addEventListener('click', () => setLandingMode(button.dataset.landingMode)));
 $('#refreshRoomsBtn').addEventListener('click', () => socket.emit('getRoomList', renderPublicRooms));
 $('#createBtn').addEventListener('click',()=>{
   const name=nameInput.value.trim(); if(!name) return homeError.textContent='Vpiši ime.'; homeError.textContent='';
@@ -514,8 +539,28 @@ function closeChat({ fromHistory = false } = {}) {
 }
 $('#chatToggle').addEventListener('click',openChat);
 $('#chatClose').addEventListener('click',()=>closeChat());
-$('#rulesToggle').addEventListener('click',()=>$('#rulesPanel').classList.remove('hidden'));
+function openRules(topic = '') {
+  $('#rulesPanel').classList.remove('hidden');
+  if (!topic) return;
+  $('#rulesSearch').value = '';
+  $$('#rulesList details').forEach((item) => item.classList.remove('hidden'));
+  $('#rulesEmpty').classList.add('hidden');
+  const section = $(`[data-rule="${topic}"]`);
+  if (section) { section.open = true; setTimeout(() => section.scrollIntoView({ block:'start' }), 0); }
+}
+$('#rulesToggle').addEventListener('click',()=>openRules());
 $('#rulesClose').addEventListener('click',()=>$('#rulesPanel').classList.add('hidden'));
+$('#rulesSearch').addEventListener('input', (event) => {
+  const query = event.target.value.trim().toLocaleLowerCase('sl');
+  let matches = 0;
+  $$('#rulesList details').forEach((section) => {
+    const match = !query || section.textContent.toLocaleLowerCase('sl').includes(query);
+    section.classList.toggle('hidden', !match);
+    if (query && match) section.open = true;
+    if (match) matches += 1;
+  });
+  $('#rulesEmpty').classList.toggle('hidden', matches > 0);
+});
 window.addEventListener('popstate',()=>{ if (chatOpen) closeChat({ fromHistory:true }); });
 window.addEventListener('keydown',(event)=>{ if (event.key !== 'Escape') return; if (chatOpen) closeChat(); else if (!$('#rulesPanel').classList.contains('hidden')) $('#rulesPanel').classList.add('hidden'); else $('#leaveDialog').classList.add('hidden'); });
 $('#leaveRoomBtn').addEventListener('click',()=>{ if(chatOpen) closeChat(); $('#rulesPanel').classList.add('hidden'); $('#leaveDialog').classList.remove('hidden'); setTimeout(()=>$('#leaveCancel').focus(),0); });
@@ -526,7 +571,11 @@ $('#leaveConfirm').addEventListener('click',()=>{
   if (state?.code) localStorage.removeItem(`snops-token-${state.code}`);
   history.replaceState(null, '', location.pathname); location.reload();
 });
-$('#roundDialogClose').addEventListener('click',()=>$('#roundDialog').classList.add('hidden'));
+$('#roundDialogClose').addEventListener('click',()=>{
+  const nextRound = $('#roundDialogClose').dataset.action === 'next-round';
+  $('#roundDialog').classList.add('hidden');
+  if (nextRound) { selectedTalon.clear(); socket.emit('nextRound'); }
+});
 
 socket.on('state',(next)=>{
   if (chatInitialized && !chatOpen && next.chat.length) {
