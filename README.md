@@ -25,25 +25,33 @@ Mobilna online igra Šnops za družinsko igranje na ločenih telefonih. Trenutna
 
 ## Demo prikaz
 
-### Začetni zaslon
+Posnetki glavnih tokov se generirajo z vizualnimi regresijskimi testi (`npm run test:ui:update`).
 
-![Začetni zaslon na ozkem mobilnem viewportu](playwright-screenshots/01-home-320x568.png)
-
-### Čakalnica za štiri igralce
-
-| Igralec 1 (320 × 568) | Igralec 2 (375 × 667) |
+| Ustvarjanje sobe | Povabilo s kodo |
 | --- | --- |
-| ![Čakalnica igralca 1](playwright-screenshots/02-lobby-player1-320x568.png) | ![Čakalnica igralca 2](playwright-screenshots/02-lobby-player2-375x667.png) |
+| ![Mobilni začetni zaslon](playwright-screenshots/landing-create-mobile.png) | ![Pridružitev prek povezave s kodo](playwright-screenshots/landing-invitation-mobile.png) |
 
-| Igralec 3 (390 × 844) | Igralec 4 (430 × 932) |
+| Gostiteljska čakalnica | Iskanje pravil |
 | --- | --- |
-| ![Čakalnica igralca 3](playwright-screenshots/02-lobby-player3-390x844.png) | ![Čakalnica igralca 4](playwright-screenshots/02-lobby-player4-430x932.png) |
+| ![Čakalnica gostitelja](playwright-screenshots/lobby-host-mobile.png) | ![Iskanje po zložljivih pravilih](playwright-screenshots/rules-search-mobile.png) |
 
-### Ključna stanja igre
+### Preverjanje kakovosti UI
 
-| Predvig ali udarec | Rufanje aduta | Licitacija |
-| --- | --- | --- |
-| ![Izbira predviga ali udarca](playwright-screenshots/03-cut-player3-390x844.png) | ![Rufanje aduta](playwright-screenshots/04-call-trump-player1-320x568.png) | ![Licitacija](playwright-screenshots/05-auction-player1-320x568.png) |
+```bash
+npx playwright install chromium
+npm run test:ui
+```
+
+Testi preverijo mobilni in namizni prikaz, vizualne baseline, 200-% besedilo, dostopna imena, landscape z zmanjšanim viewportom ter čas toka ustvarjanja sobe.
+
+Referenčna lokalna meritev toka `odprtje strani → ustvarjanje sobe → prikazana čakalnica`:
+
+| Projekt | Landing pripravljen | Ustvarjanje sobe | Celoten tok |
+| --- | ---: | ---: | ---: |
+| mobile-chromium | 966 ms | 396 ms | 1614 ms |
+| desktop-chromium | 1029 ms | 706 ms | 1960 ms |
+
+Meritve so namenjene odkrivanju večjih regresij, ne predstavljajo produkcijskega SLA in so odvisne od zmogljivosti testnega okolja.
 
 ## Karte
 
