@@ -775,3 +775,8 @@ body.game-active main { padding:0; }
 .captured-card > span { font-size:.62rem; overflow-wrap:anywhere; text-align:center; }
 .captured-card .card { width:min(100%,90px); height:auto; aspect-ratio: .67; pointer-events:none; }
 @media(max-width:350px) { .captured-card > span { font-size:.55rem; } }
+
+/* Licitacija naj prikazuje samo izbire; pojasnila so v pravilih (?). */
+#gameView.game-screen .auction-action:empty { display:none; }
+#gameView.game-screen .auction-action { border:0; background:transparent; box-shadow:none; padding:0; }
+#gameView.game-screen .auction-action:not(:has(.contract-grid)) { display:none; }

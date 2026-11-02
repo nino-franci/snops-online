@@ -180,21 +180,22 @@ function actionStatus() {
 }
 
 function renderGameInfo() {
-  const status = actionStatus();
-  const active = state.phase !== 'lobby';
-  if (!active) {
+  if (state.phase === 'lobby') {
     $('#gameInfo').innerHTML = '';
     return;
   }
-  const contract = state.contract && state.contracts[state.contract]
-    ? state.contracts[state.contract].label : (state.phase === 'auction' ? 'Licitacija' : 'Še ni izbrana');
-  const useTrump = state.trumpSuit && (!state.contract || ['normal','schnops','big_trump'].includes(state.contract));
+  const best = state.phase === 'auction' ? state.auction?.best : null;
+  const contractKey = state.contract || best?.contract;
+  const contract = contractKey && state.contracts[contractKey]
+    ? state.contracts[contractKey].label : (state.phase === 'auction' ? 'Licitacija' : 'Ni izbrana');
+  const bidderIndex = Number.isInteger(state.bidderIndex) ? state.bidderIndex : best?.playerIndex;
+  const bidder = Number.isInteger(bidderIndex)
+    ? (state.players[bidderIndex]?.name || 'Igralec') + (bidderIndex === state.me ? ' (ti)' : '')
+    : '—';
+  const useTrump = state.trumpSuit && (!contractKey || ['normal','schnops','big_trump'].includes(contractKey));
   const trump = useTrump ? `${suitSymbol[state.trumpSuit]} ${suitName[state.trumpSuit]}` : 'Brez aduta';
-  let turn = status ? `${status.mine ? 'Ti' : 'Čakamo'} · ${status.detail}` : '—';
-  if (state.phase === 'playing' && state.trickCollectAt) turn = `${state.players[state.trickWinner]?.name || 'Igralec'} pobere štih`;
-  else if (state.phase === 'playing') turn = state.turnIndex === state.me ? 'Ti si na potezi' : (state.players[state.turnIndex]?.name || 'Igralec');
   $('#gameInfo').innerHTML = [
-    ['Igra', contract], ['Adut', trump], ['Množilnik', `×${state.multiplier || 1}`], ['Na potezi', turn]
+    ['Igra', contract], ['Igra igralec', bidder], ['Adut', trump], ['Množilnik', `×${state.multiplier || 1}`]
   ].map(([label, value]) => `<div class="game-status-cell"><span>${label}</span><strong>${safe(value)}</strong></div>`).join('');
 }
 
@@ -212,7 +213,7 @@ function renderPlayersAround() {
   const players = state.players.map((p) => {
     const mine = p.index === state.me;
     const partner = state.playerCount===4 && ((p.index-state.me+4)%4===2);
-    const turn = state.turnIndex===p.index;
+    const turn = (state.phase === 'auction' ? state.auction?.currentIndex : state.turnIndex) === p.index;
     return `<button type="button" class="table-seat ${relativeSeat(p.index)} ${turn?'turn':''} ${mine?'mine':''} ${hostCanArrange?'arrangeable':''} ${seatSwapFrom===p.index?'picked':''}" ${hostCanArrange ? `draggable="true" data-seat-chip="${p.index}" data-drop-seat="${p.index}"` : 'tabindex="-1"'}>
       <div class="seat-name">${turn?'<span class="turn-dot"></span>':''}<b>${p.isBot?'🤖 ':''}${safe(p.name)}</b>${mine?' <span class="you">ti</span>':partner?' <span class="partner">partner</span>':''}</div>
       ${mine ? `<span class="seat-meta">${p.handCount} kart</span>` : cardBacks(p.handCount)}
@@ -353,13 +354,12 @@ function renderTalonActions() {
 function renderAuctionActions() {
   const mine = state.me === state.auction.currentIndex;
   const best = state.auction.best;
-  const passedNames = (state.auction.passed || []).map(i => state.players[i]?.name).filter(Boolean);
-  const bestText = best ? `${state.contracts[best.contract].label} — ${state.players[best.playerIndex].name}` : 'še brez posebne igre';
   const order = ['schnops','small','big','big_trump','eighteen','twentyfour'];
-  return `<div class="action-box"><h3>Licitacija</h3><p class="muted">Trenutno: <b>${safe(bestText)}</b></p>
-    ${mine ? `<div class="contract-grid">${order.map((key) => { const c=state.contracts[key]; const disabled=best && c.value<=best.value; return `<button class="contract-btn" data-bid="${key}" ${disabled?'disabled':''}>${safe(c.label)}<br><small>${c.value}</small></button>`; }).join('')}<button class="contract-btn pass" data-bid="pass">Dalje</button></div>` : `<p class="muted">Na vrsti je ${safe(state.players[state.auction.currentIndex].name)}.</p>`}
-    ${passedNames.length ? `<p class="muted">Dalje (izločeni): ${safe(passedNames.join(', '))}</p>` : ''}${ruleHelp('auction','Kako deluje licitacija?')}</div>`;
+  return `<div class="action-box auction-action">
+    ${mine ? `<div class="contract-grid">${order.map((key) => { const c=state.contracts[key]; const disabled=best && c.value<=best.value; return `<button class="contract-btn" data-bid="${key}" ${disabled?'disabled':''}>${safe(c.label)}<br><small>${c.value}</small></button>`; }).join('')}<button class="contract-btn pass" data-bid="pass">Dalje</button></div>` : ''}
+  </div>`;
 }
+
 function contraLabel() {
   if (!state.contra) return '';
   if (state.contra.stage === 0) return 'Kontra';
