@@ -744,3 +744,34 @@ body.game-active main { padding:0; }
   .game-tools { gap:4px; }
   .tool-button { min-width:42px; min-height:42px; padding:7px; }
 }
+
+/* Stalno vidni pomembni podatki, tudi na majhnem telefonu. */
+#gameView.game-screen .game-info {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px; padding:0; overflow:visible; min-width:0;
+}
+#gameView.game-screen .game-status-cell {
+  display:flex; flex-direction:column; justify-content:center;
+  min-width:0; padding:5px 7px; border-radius:8px;
+  background:rgba(8,25,18,.93); border:1px solid var(--line);
+}
+#gameView.game-screen .game-status-cell span { color:var(--muted); font-size:.6rem; }
+#gameView.game-screen .game-status-cell strong {
+  color:var(--text); font-size:clamp(.67rem,2.7vw,.84rem);
+  white-space:normal; overflow-wrap:anywhere; line-height:1.15;
+}
+@media (min-width:720px) {
+  #gameView.game-screen .game-info { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+#gameView.game-screen .game-tip { display:none; }
+#gameView.game-screen .table { grid-template-rows:auto minmax(0,1fr) auto auto; }
+.captured-pile { pointer-events:auto; cursor:pointer; border:0; padding:0; background:transparent; font:inherit; text-align:left; }
+.captured-dialog-card { width:min(96vw,680px); max-height:90dvh; display:flex; flex-direction:column; }
+.captured-trick-list { overflow-y:auto; min-height:0; margin:8px 0 14px; }
+.captured-trick { padding:8px 0 12px; border-bottom:1px solid var(--line); }
+.captured-trick h3 { font-size:.88rem; margin:0 0 8px; }
+.captured-trick-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; }
+.captured-card { display:flex; flex-direction:column; align-items:center; min-width:0; gap:4px; }
+.captured-card > span { font-size:.62rem; overflow-wrap:anywhere; text-align:center; }
+.captured-card .card { width:min(100%,90px); height:auto; aspect-ratio: .67; pointer-events:none; }
+@media(max-width:350px) { .captured-card > span { font-size:.55rem; } }

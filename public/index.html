@@ -86,7 +86,6 @@
             <div id="playersAround" class="players-around"></div>
             <div id="trickArea" class="trick-area"></div>
           </div>
-          <aside id="gameTip" class="game-tip" aria-live="polite"></aside>
           <div id="actionArea" class="action-area"></div>
           <div id="handArea" class="hand-area"></div>
         </section>
@@ -133,6 +132,9 @@
     <div id="toast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true"></div>
     <div id="leaveDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="leaveTitle">
       <section class="modal-card"><h2 id="leaveTitle">Zapusti sobo?</h2><p>Ali res želiš zapustiti trenutno sobo?</p><div class="modal-actions"><button id="leaveCancel" class="ghost">Ostani</button><button id="leaveConfirm" class="danger">Zapusti sobo</button></div></section>
+    </div>
+    <div id="capturedDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="capturedTitle">
+      <section class="modal-card captured-dialog-card"><h2 id="capturedTitle">Pobrani štihi tvoje ekipe</h2><div id="capturedTrickList" class="captured-trick-list"></div><button type="button" id="capturedDialogClose" class="primary big">Nazaj k igri</button></section>
     </div>
     <div id="scoreDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="scoreDialogTitle">
       <section class="modal-card"><h2 id="scoreDialogTitle">Popravi rezultat</h2><div id="scoreTools"></div><div class="modal-actions"><button id="scoreDialogClose" class="ghost">Zapri</button></div></section>

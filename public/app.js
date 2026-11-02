@@ -180,28 +180,28 @@ function actionStatus() {
 }
 
 function renderGameInfo() {
-  const pills = [];
   const status = actionStatus();
-  if (status) pills.push(`<span class="turn-status ${status.mine ? 'mine' : 'waiting'}"><b>${status.text}</b><span>— ${safe(status.detail)}</span></span>`);
-  if (state.phase === 'playing') {
-    pills.push(`Pravila <b>${state.strictRules ? 'stroga' : 'ohlapna'}</b>`);
-    if (state.trumpSuit && ['normal','schnops','big_trump'].includes(state.contract)) pills.push(`Adut <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
-    else pills.push('<b>Brez aduta</b>');
-    const turnName = state.players[state.turnIndex]?.name || '';
-    pills.push(`Na vrsti <b>${safe(turnName)}${state.turnIndex===state.me?' (ti)':''}</b>`);
-  } else {
-    if (state.playerCount === 4 && state.players.length === 4) pills.push(`<b>Pari:</b> ${safe(state.players[0].name)} + ${safe(state.players[2].name)} / ${safe(state.players[1].name)} + ${safe(state.players[3].name)}`);
-    if (state.trumpSuit) pills.push(`Adut: <b>${suitSymbol[state.trumpSuit]} ${safe(suitName[state.trumpSuit])}</b>`);
-    if (state.contract) pills.push(`Igra: <b>${safe(state.contracts[state.contract].label)}</b>`);
-    if (state.multiplier > 1) pills.push(`Kontra: <b>×${state.multiplier}</b>`);
+  const active = state.phase !== 'lobby';
+  if (!active) {
+    $('#gameInfo').innerHTML = '';
+    return;
   }
-  $('#gameInfo').innerHTML = pills.map((p) => `<span class="info-pill">${p}</span>`).join('');
+  const contract = state.contract && state.contracts[state.contract]
+    ? state.contracts[state.contract].label : (state.phase === 'auction' ? 'Licitacija' : 'Še ni izbrana');
+  const useTrump = state.trumpSuit && (!state.contract || ['normal','schnops','big_trump'].includes(state.contract));
+  const trump = useTrump ? `${suitSymbol[state.trumpSuit]} ${suitName[state.trumpSuit]}` : 'Brez aduta';
+  let turn = status ? `${status.mine ? 'Ti' : 'Čakamo'} · ${status.detail}` : '—';
+  if (state.phase === 'playing' && state.trickCollectAt) turn = `${state.players[state.trickWinner]?.name || 'Igralec'} pobere štih`;
+  else if (state.phase === 'playing') turn = state.turnIndex === state.me ? 'Ti si na potezi' : (state.players[state.turnIndex]?.name || 'Igralec');
+  $('#gameInfo').innerHTML = [
+    ['Igra', contract], ['Adut', trump], ['Množilnik', `×${state.multiplier || 1}`], ['Na potezi', turn]
+  ].map(([label, value]) => `<div class="game-status-cell"><span>${label}</span><strong>${safe(value)}</strong></div>`).join('');
 }
 
 function relativeSeat(index) {
   if (state.playerCount !== 4 || state.me < 0) return 'seat-inline';
   const delta = (index - state.me + 4) % 4;
-  return ['seat-bottom','seat-right','seat-top','seat-left'][delta];
+  return ['seat-bottom','seat-left','seat-top','seat-right'][delta];
 }
 function cardBacks(count) {
   const visible = Math.min(5, Math.max(0, count));
@@ -220,11 +220,22 @@ function renderPlayersAround() {
   }).join('');
   const pileOwner = state.myTeamPileOwner;
   const pile = Number.isInteger(pileOwner) && state.myTeamCapturedCount > 0
-    ? `<div class="captured-pile ${relativeSeat(pileOwner)}"><div class="pile-cards" aria-hidden="true"><i></i><i></i><i></i></div><div><b>${state.myTeamCapturedCount} kart</b><span>${state.myTeamRoundPoints} točk</span></div></div>`
+    ? `<button type="button" id="capturedPileOpen" class="captured-pile ${relativeSeat(pileOwner)}" aria-label="Poglej pobrane štihe"><div class="pile-cards" aria-hidden="true"><i></i><i></i><i></i></div><div><b>${state.myTeamCapturedCount} kart</b><span>${state.myTeamRoundPoints} točk · Poglej</span></div></button>`
     : '';
   $('#playersAround').innerHTML = players + pile;
+  $('#capturedPileOpen')?.addEventListener('click', openCapturedTricks);
 }
 
+function openCapturedTricks() {
+  const dialog = $('#capturedDialog');
+  if (!dialog) return;
+  const rounds = state.myTeamCapturedTricks || [];
+  $('#capturedTrickList').innerHTML = rounds.length ? rounds.map((trick, i) =>
+    `<section class="captured-trick"><h3>Štih ${i + 1} · pobral ${safe(state.players[trick.winnerIndex]?.name || 'Igralec')}</h3><div class="captured-trick-cards">${trick.cards.map(play => `<div class="captured-card"><span>${safe(state.players[play.playerIndex]?.name || 'Igralec')}</span>${cardHTML(play.card)}</div>`).join('')}</div></section>`
+  ).join('') : '<p>Še nimate pobranih štihov.</p>';
+  dialog.classList.remove('hidden');
+}
+$('#capturedDialogClose')?.addEventListener('click', () => $('#capturedDialog').classList.add('hidden'));
 function smallTrackPosition(seatClass, step) {
   // step 0..4: prva karta je blizu sredine, naslednje gredo proti igralcu.
   const t = 0.25 + step * 0.12;
@@ -273,6 +284,7 @@ function renderTrick() {
 
 function renderTip() {
   const tip = $('#gameTip');
+  if (!tip) return;
   if (state.phase !== 'playing') { tip.innerHTML = ''; tip.classList.add('hidden'); return; }
   let text = 'Karte drugih igralcev ostanejo skrite.';
   if (state.trickCollectAt) text = 'Poglej štih — karte bodo pobrane čez trenutek.';
@@ -341,11 +353,12 @@ function renderTalonActions() {
 function renderAuctionActions() {
   const mine = state.me === state.auction.currentIndex;
   const best = state.auction.best;
+  const passedNames = (state.auction.passed || []).map(i => state.players[i]?.name).filter(Boolean);
   const bestText = best ? `${state.contracts[best.contract].label} — ${state.players[best.playerIndex].name}` : 'še brez posebne igre';
   const order = ['schnops','small','big','big_trump','eighteen','twentyfour'];
   return `<div class="action-box"><h3>Licitacija</h3><p class="muted">Trenutno: <b>${safe(bestText)}</b></p>
     ${mine ? `<div class="contract-grid">${order.map((key) => { const c=state.contracts[key]; const disabled=best && c.value<=best.value; return `<button class="contract-btn" data-bid="${key}" ${disabled?'disabled':''}>${safe(c.label)}<br><small>${c.value}</small></button>`; }).join('')}<button class="contract-btn pass" data-bid="pass">Dalje</button></div>` : `<p class="muted">Na vrsti je ${safe(state.players[state.auction.currentIndex].name)}.</p>`}
-    ${ruleHelp('auction','Kako deluje licitacija?')}</div>`;
+    ${passedNames.length ? `<p class="muted">Dalje (izločeni): ${safe(passedNames.join(', '))}</p>` : ''}${ruleHelp('auction','Kako deluje licitacija?')}</div>`;
 }
 function contraLabel() {
   if (!state.contra) return '';

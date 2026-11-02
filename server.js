@@ -105,7 +105,7 @@ function createRoom(hostSocket, payload) {
     contra: null, multiplier: 1,
     trick: [], trickLeader: null, turnIndex: null, trickNo: 0, lastTrickWinner: null, smallHistory: [], meldDisplay: null,
     trickWinner: null, trickCollectAt: null, trickResolveTimer: null,
-    roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], teamPileOwner: [null, null], melds: [],
+    roundPoints: Array(playerCount).fill(0), trickCounts: Array(playerCount).fill(0), captured: [], capturedTricks: [[], []], teamPileOwner: [null, null], melds: [],
     teamPenalty: [0, 0], roundResult: null, log: [], chat: []
   };
   rooms.set(room.code, room);
@@ -159,6 +159,7 @@ function startRound(room) {
   room.roundPoints = Array(room.playerCount).fill(0);
   room.trickCounts = Array(room.playerCount).fill(0);
   room.captured = Array.from({ length: room.playerCount }, () => []);
+  room.capturedTricks = [[], []];
   room.teamPileOwner = [null, null];
   room.melds = [];
   room.roundResult = null;
@@ -216,10 +217,22 @@ function completeFourDeal(room) {
 
 function beginAuction(room) {
   room.phase = 'auction';
-  room.auction = { currentIndex: room.callerIndex, best: null, passesSinceBid: 0, totalPasses: 0 };
+  room.auction = { currentIndex: room.callerIndex, best: null, passesSinceBid: 0, totalPasses: 0, passed: [] };
   log(room, 'Licitacija: Dalje ali Višam. Če vsi rečejo dalje, se igra navadna igra.');
 }
 
+function nextAuctionIndex(room, index) {
+  for (let offset = 1; offset <= room.playerCount; offset++) {
+    const candidate = (index + offset) % room.playerCount;
+    if (!room.auction.passed.includes(candidate)) return candidate;
+  }
+  return index;
+}
+function auctionFinished(room) {
+  if (!room.auction.best) return room.auction.passed.length >= room.playerCount;
+  return room.auction.passed.length >= room.playerCount || (room.auction.passed.length >= room.playerCount - 1 &&
+    !room.auction.passed.includes(room.auction.best.playerIndex));
+}
 function canBidInstant(room, index, contract) {
   const hand = room.hands[index] || [];
   if (hand.length !== 5) return false;
@@ -404,6 +417,7 @@ function resolveStandardTrick(room) {
   room.roundPoints[winner] += points;
   room.trickCounts[winner] += 1;
   room.captured[winner].push(...room.trick.map((p) => p.card));
+  if (winnerTeam !== null) room.capturedTricks[winnerTeam].push({ winnerIndex: winner, cards: room.trick.map(p => ({ playerIndex: p.playerIndex, card: p.card })) });
   if (winnerTeam !== null && room.teamPileOwner[winnerTeam] === null) room.teamPileOwner[winnerTeam] = winner;
   room.lastTrickWinner = winner;
   room.meldDisplay = null;
@@ -569,15 +583,14 @@ function botDoAction(room) {
   if (room.phase === 'auction') {
     const contract = botChooseBid(room, idx);
     if (contract === 'pass') {
-      room.auction.totalPasses += 1; room.auction.passesSinceBid += 1; log(room, `${room.players[idx].name}: dalje.`);
+      room.auction.totalPasses += 1; room.auction.passesSinceBid += 1; room.auction.passed.push(idx); log(room, `${room.players[idx].name}: dalje.`);
     } else {
       const value = CONTRACTS[contract].value;
       room.auction.best = { contract, playerIndex: idx, value }; room.auction.passesSinceBid = 0;
       log(room, `${room.players[idx].name}: višam na ${CONTRACTS[contract].label}.`);
     }
-    if (!room.auction.best && room.auction.totalPasses >= 4) finishAuction(room);
-    else if (room.auction.best && room.auction.passesSinceBid >= 3) finishAuction(room);
-    else room.auction.currentIndex = nextIndex(room, idx);
+    if (auctionFinished(room)) finishAuction(room);
+    else room.auction.currentIndex = nextAuctionIndex(room, idx);
     return true;
   }
   if (room.phase === 'playing') {
@@ -648,7 +661,7 @@ function publicState(room, socketId) {
     code: room.code, playerCount: room.playerCount, targetScore: room.targetScore, strictRules: room.strictRules, isPublic: room.isPublic, phase: room.phase, roundNo: room.roundNo,
     dealerIndex: room.dealerIndex, cutterIndex: room.cutterIndex, callerIndex: room.callerIndex, dealMode: room.dealMode,
     trumpSuit: room.trumpSuit, contract: room.contract, bidderIndex: room.bidderIndex, multiplier: room.multiplier,
-    auction: room.auction ? { currentIndex: room.auction.currentIndex, best: room.auction.best, passesSinceBid: room.auction.passesSinceBid } : null,
+    auction: room.auction ? { currentIndex: room.auction.currentIndex, best: room.auction.best, passesSinceBid: room.auction.passesSinceBid, passed: room.auction.passed } : null,
     contra: room.contra ? { stage: room.contra.stage, actionTeam: room.contra.actionTeam, passed: room.contra.passed } : null,
     players: room.players.map((p, i) => ({
       index: i, name: p.name, connected: p.isBot ? true : p.connected, isHost: i === hostIndex, isBot: Boolean(p.isBot), handCount: room.hands[i]?.length || 0,
@@ -661,6 +674,7 @@ function publicState(room, socketId) {
       { index: 1, name: room.teamNames?.[1] || 'Ekipa 2', members: [1,3], penalty: room.teamPenalty[1] }
     ] : null,
     myTeamRoundPoints: myTeamScore, myTeamCapturedCount,
+    myTeamCapturedTricks: four && myTeam !== null ? room.capturedTricks[myTeam] : [],
     myTeamPileOwner: four && myTeam !== null ? room.teamPileOwner[myTeam] : null,
     me, myTeam, myHand: me >= 0 ? (room.hands[me] || []) : [], legalCardIds: me >= 0 ? legalCardIds(room, me) : [],
     eligibleMelds: me >= 0 ? eligibleMelds(room, me) : [], canCount, canClose,
@@ -811,8 +825,9 @@ io.on('connection', (socket) => {
   socket.on('bid', ({ contract } = {}) => {
     const room = roomForSocket(socket); if (!room || room.phase !== 'auction' || !room.auction) return;
     const { index } = playerBySocket(room, socket.id); if (index !== room.auction.currentIndex) return emitError(socket, 'Nisi na vrsti za licitacijo.');
+    if (room.auction.passed.includes(index)) return emitError(socket, 'Izbral si Dalje in ne moreš več višati.');
     if (contract === 'pass') {
-      room.auction.totalPasses += 1; room.auction.passesSinceBid += 1; log(room, `${room.players[index].name}: dalje.`);
+      room.auction.totalPasses += 1; room.auction.passesSinceBid += 1; room.auction.passed.push(index); log(room, `${room.players[index].name}: dalje.`);
     } else {
       if (!CONTRACTS[contract] || contract === 'normal') return emitError(socket, 'Izberi eno od iger 6, 7, 9, 12, 18 ali 24.');
       const currentValue = room.auction.best?.value || 0;
@@ -822,9 +837,8 @@ io.on('connection', (socket) => {
       room.auction.best = { contract, playerIndex: index, value }; room.auction.passesSinceBid = 0;
       log(room, `${room.players[index].name}: višam na ${CONTRACTS[contract].label}.`);
     }
-    if (!room.auction.best && room.auction.totalPasses >= 4) { finishAuction(room); return emitRoom(room); }
-    if (room.auction.best && room.auction.passesSinceBid >= 3) { finishAuction(room); return emitRoom(room); }
-    room.auction.currentIndex = nextIndex(room, index); emitRoom(room);
+    if (auctionFinished(room)) { finishAuction(room); return emitRoom(room); }
+    room.auction.currentIndex = nextAuctionIndex(room, index); emitRoom(room);
   });
 
   socket.on('contraAction', ({ action } = {}) => {
